@@ -1,5 +1,6 @@
 import streamlit as st
 from src.pdf_processor import extract_pages   
+from src.chunking import chunk_pages
 
 st.set_page_config(
     page_title="ResearchCopilot",
@@ -17,11 +18,16 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     pdf_bytes = uploaded_file.read()
-    pages, page_count = extract_pages(pdf_bytes)
 
+    pages, page_count = extract_pages(pdf_bytes)
+    chunks = chunk_pages(pages)
 
     st.success(f"PDF uploaded: {uploaded_file.name}")
-    st.metric("Pages", page_count)
+    
+    col1, col2 = st.columns(2)
+    col1.metric("Pages", page_count)
+    col2.metric("Text chunks", len(chunks))
+
 
     st.subheader("Extracted text")
 
