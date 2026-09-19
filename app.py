@@ -1,6 +1,5 @@
-import fitz  # PyMuPDF
 import streamlit as st
-
+from src.pdf_processor import extract_pages   
 
 st.set_page_config(
     page_title="ResearchCopilot",
@@ -18,25 +17,14 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     pdf_bytes = uploaded_file.read()
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    pages, page_count = extract_pages(pdf_bytes)
+
 
     st.success(f"PDF uploaded: {uploaded_file.name}")
-    st.metric("Pages", len(document))
-
-    pages = []
-
-    for page_number, page in enumerate(document, start=1):
-        page_text = page.get_text().strip()
-
-        if page_text:
-            pages.append(
-                {
-                    "page_number": page_number,
-                    "text": page_text,
-                }
-            )
+    st.metric("Pages", page_count)
 
     st.subheader("Extracted text")
+
 
     if not pages:
         st.warning(
