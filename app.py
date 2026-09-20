@@ -1,7 +1,14 @@
 import streamlit as st
-from src.pdf_processor import extract_pages   
+
 from src.chunking import chunk_pages
-from src.rag import create_embeddings, load_embedding_model
+from src.pdf_processor import extract_pages
+from src.rag import (
+    create_embeddings,
+    create_faiss_index,
+    load_embedding_model,
+    search_chunks,
+)
+
 
 st.set_page_config(
     page_title="ResearchCopilot",
@@ -32,18 +39,46 @@ if uploaded_file is not None:
 
     model = get_embedding_model()
     embeddings = create_embeddings(chunks, model)
-
+    index = create_faiss_index(embeddings)
 
     st.success(f"PDF uploaded: {uploaded_file.name}")
-    
-    col1, col2,col3 = st.columns(3)
+
+    col1, col2, col3 = st.columns(3)
     col1.metric("Pages", page_count)
     col2.metric("Text chunks", len(chunks))
     col3.metric("Embeddings", len(embeddings))
 
+    st.divider()
+    st.subheader("Search the PDF")
 
+    query = st.text_input(
+        "Ask a question about the PDF",
+        placeholder="Example: What are the main findings?",
+    )
+
+    if query:
+        results = search_chunks(
+            query=query,
+            model=model,
+            index=index,
+            chunks=chunks,
+            top_k=3,
+        )
+
+        if not results:
+            st.warning("No searchable text was found.")
+        else:
+            for result_number, result in enumerate(results, start=1):
+                st.markdown(
+                    f"### Result {result_number} — Page {result['page_number']}"
+                )
+                st.caption(
+                    f"Similarity score: {result['score']:.3f}"
+                )
+                st.write(result["text"])
+
+    st.divider()
     st.subheader("Extracted text")
-
 
     if not pages:
         st.warning(
