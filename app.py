@@ -1,6 +1,7 @@
 import streamlit as st
 
 from src.chunking import chunk_pages
+from src.llm import generate_answer
 from src.pdf_processor import extract_pages
 from src.rag import (
     create_embeddings,
@@ -62,12 +63,23 @@ if uploaded_file is not None:
             model=model,
             index=index,
             chunks=chunks,
-            top_k=3,
+            top_k=5,
         )
 
         if not results:
             st.warning("No searchable text was found.")
         else:
+            with st.spinner("Analyzing the PDF with OpenAI..."):
+                answer = generate_answer(
+                    question=query,
+                    results=results,
+                )
+
+            st.subheader("Answer")
+            st.write(answer)
+
+            st.subheader("Sources") 
+
             for result_number, result in enumerate(results, start=1):
                 st.markdown(
                     f"### Result {result_number} — Page {result['page_number']}"

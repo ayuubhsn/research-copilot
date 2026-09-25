@@ -40,7 +40,7 @@ def create_faiss_index(embeddings):
     return index
 
 
-def search_chunks(query, model, index, chunks, top_k=3):
+def search_chunks(query, model, index, chunks, top_k=5):
     """Finner de mest relevante PDF-chunkene for et spørsmål."""
     if index is None or not chunks:
         return []

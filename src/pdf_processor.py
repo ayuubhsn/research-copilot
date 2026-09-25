@@ -1,9 +1,9 @@
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 
 
 def extract_pages(pdf_bytes):
     """Leser en PDF og returnerer tekst fra hver side."""
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     pages = []
 
     for page_number, page in enumerate(document, start=1):
