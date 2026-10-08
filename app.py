@@ -10,12 +10,12 @@ from src.rag import (
     search_chunks,
 )
 
-
 st.set_page_config(
     page_title="ResearchCopilot",
     page_icon="📚",
     layout="wide",
 )
+
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -26,7 +26,6 @@ st.markdown("""
         background-color: #0a0a0f;
     }
 
-    /* Upload-boksen */
     [data-testid="stFileUploader"] {
         background-color: #12121f;
         border: 1px dashed #2a2a3e;
@@ -34,7 +33,6 @@ st.markdown("""
         padding: 1rem;
     }
 
-    /* Metrics */
     [data-testid="stMetric"] {
         background-color: #12121f;
         border: 1px solid #1e1e30;
@@ -42,7 +40,6 @@ st.markdown("""
         padding: 1rem;
     }
 
-    /* Søkefelt */
     .stTextInput > div > div > input {
         background-color: #12121f;
         color: white;
@@ -51,7 +48,6 @@ st.markdown("""
         padding: 12px;
     }
 
-    /* Resultat-kort */
     .source-card {
         background: #12121f;
         border: 1px solid #1e1e30;
@@ -78,7 +74,6 @@ st.markdown("""
         line-height: 1.6;
     }
 
-    /* Answer-boksen */
     .answer-box {
         background: linear-gradient(135deg, #0f1a2e, #12121f);
         border: 1px solid #1a3a5c;
@@ -90,7 +85,6 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
-    /* Expander */
     .streamlit-expanderHeader {
         background-color: #12121f;
         border-radius: 8px;
@@ -98,42 +92,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_resource
 def get_embedding_model():
-    """Laster embedding-modellen én gang."""
     return load_embedding_model()
 
 
-st.title("ResearchCopilot")
-st.caption("Upload an academic PDF and explore its content.")
+st.title("📚 ResearchCopilot")
+st.caption("Upload academic PDFs and search across them.")
 
-uploaded_file = st.file_uploader(
-    "Upload a PDF article",
+uploaded_files = st.file_uploader(
+    "Upload PDF articles",
     type=["pdf"],
+    accept_multiple_files=True,
 )
 
-if uploaded_file is not None:
-    pdf_bytes = uploaded_file.read()
+if uploaded_files:
+    # samle chunks fra alle PDFer
+    all_chunks = []
+    total_pages = 0
 
-    pages, page_count = extract_pages(pdf_bytes)
-    chunks = chunk_pages(pages)
+    for uploaded_file in uploaded_files:
+        pdf_bytes = uploaded_file.read()
+        pages, page_count = extract_pages(pdf_bytes)
+        chunks = chunk_pages(pages, source=uploaded_file.name)
+        all_chunks.extend(chunks)
+        total_pages += page_count
 
     model = get_embedding_model()
-    embeddings = create_embeddings(chunks, model)
+    embeddings = create_embeddings(all_chunks, model)
     index = create_faiss_index(embeddings)
 
-    st.success(f"PDF uploaded: {uploaded_file.name}")
+    st.success(f"{len(uploaded_files)} PDF(s) uploaded")
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Pages", page_count)
-    col2.metric("Text chunks", len(chunks))
-    col3.metric("Embeddings", len(embeddings))
+    col1.metric("Documents", len(uploaded_files))
+    col2.metric("Total pages", total_pages)
+    col3.metric("Text chunks", len(all_chunks))
 
     st.divider()
-    st.subheader("Search the PDF")
+    st.subheader("Search across documents")
 
     query = st.text_input(
-        "Ask a question about the PDF",
+        "Ask a question",
         placeholder="Example: What are the main findings?",
     )
 
@@ -142,26 +143,27 @@ if uploaded_file is not None:
             query=query,
             model=model,
             index=index,
-            chunks=chunks,
+            chunks=all_chunks,
             top_k=5,
         )
 
         if not results:
-            st.warning("No searchable text was found.")
+            st.warning("No relevant sources found.")
         else:
-            with st.spinner("Analyzing the PDF with OpenAI..."):
+            with st.spinner("Analyzing..."):
                 answer = generate_answer(
                     question=query,
                     results=results,
                 )
 
+            st.subheader("Answer")
             st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
 
             st.subheader("Sources")
             for i, r in enumerate(results, start=1):
                 st.markdown(f"""
                 <div class="source-card">
-                    <span class="page-badge">📄 Page {r['page_number']}</span>
+                    <span class="page-badge">📄 {r['source']} — Page {r['page_number']}</span>
                     <span class="score"> · Similarity: {r['score']:.3f}</span>
                     <div class="text">{r['text']}</div>
                 </div>
@@ -169,9 +171,11 @@ if uploaded_file is not None:
 
     st.divider()
     with st.expander("View extracted text"):
-        if not pages:
-            st.warning("No selectable text was found in this PDF.")
-        else:
-            for page_data in pages:
-                st.markdown(f"**Page {page_data['page_number']}**")
-                st.write(page_data["text"])
+        for uploaded_file in uploaded_files:
+            st.markdown(f"### {uploaded_file.name}")
+            pdf_bytes = uploaded_file.read()
+            if pdf_bytes:
+                pages, _ = extract_pages(pdf_bytes)
+                for page_data in pages:
+                    st.markdown(f"**Page {page_data['page_number']}**")
+                    st.write(page_data["text"])

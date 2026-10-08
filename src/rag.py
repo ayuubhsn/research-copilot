@@ -70,6 +70,7 @@ def search_chunks(query, model, index, chunks, top_k=5):
             {
                 "text": chunks[chunk_index]["text"],
                 "page_number": chunks[chunk_index]["page_number"],
+                "source": chunks[chunk_index]["source"],
                 "score": float(score),
             }
         )

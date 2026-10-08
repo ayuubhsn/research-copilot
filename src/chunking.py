@@ -1,4 +1,4 @@
-def chunk_pages(pages, chunk_size=500, overlap=50):
+def chunk_pages(pages, chunk_size=500, overlap=50, source="unknown"):
     """Deler PDF-sider opp i mindre tekstbiter med overlapp."""
     if overlap >= chunk_size:
         raise ValueError("overlap must be smaller than chunk_size")
@@ -18,6 +18,7 @@ def chunk_pages(pages, chunk_size=500, overlap=50):
                     {
                         "text": chunk_text,
                         "page_number": page_number,
+                        "source": source,
                     }
                 )
 

@@ -13,14 +13,14 @@ def generate_answer(question, results):
 
     context = ""
     for r in results:
-        context += f"[Side {r['page_number']}]: {r['text']}\n\n"
+        context += f"[{r['source']}, Side {r['page_number']}]: {r['text']}\n\n"
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": """Du er en hjelpsom forskningsassistent.
 Svar kun basert på konteksten. Ikke finn på informasjon.
-Oppgi sidetall i svaret, for eksempel: (Side 3).
+Oppgi filnavn og sidetall i svaret, for eksempel: (Artikkel.pdf, Side 3).
 Svar på samme språk som spørsmålet."""},
             {"role": "user", "content": f"Kontekst:\n{context}\n\nSpørsmål: {question}"}
         ],
