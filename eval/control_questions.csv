@@ -1,0 +1,23 @@
+type,question,source,expected_page,expected_answer
+fakta,Which two tasks do the authors use to study how language models use long contexts?,lost_in_the_middle.pdf,1|2,Multi-document question answering and key-value retrieval
+fakta,What is the closed-book accuracy of GPT-3.5-Turbo on the multi-document QA task?,lost_in_the_middle.pdf,5|2,56.1% [optional: its oracle accuracy is 88.3%]
+fakta,What is the oracle accuracy of Claude-1.3 on multi-document QA?,lost_in_the_middle.pdf,5,76.1%
+fakta,Which dataset are the multi-document QA questions taken from?,lost_in_the_middle.pdf,3,NaturalQuestions-Open [optional: historical Google search queries with answers from Wikipedia]
+fakta,How many queries are used in the multi-document QA experiments?,lost_in_the_middle.pdf,3,2655
+fakta,How long are the Wikipedia passages used as documents?,lost_in_the_middle.pdf,3,At most 100 tokens
+fakta,Which retrieval system is used to find the distractor documents?,lost_in_the_middle.pdf,3|9,Contriever fine-tuned on MS-MARCO
+fakta,How many key-value pairs are used in the key-value retrieval experiments?,lost_in_the_middle.pdf,6,"75, 140 and 300"
+fakta,What is the maximum context length of MPT-30B-Instruct?,lost_in_the_middle.pdf,4,8192 tokens
+fakta,How much would it cost to run the full experiments with GPT-4?,lost_in_the_middle.pdf,5,More than $6000
+forstaelse,What shape does performance follow as the relevant information moves through the context?,lost_in_the_middle.pdf,1|2|5,"U-shaped: highest at the beginning and end, lowest in the middle [optional: primacy and recency bias]"
+forstaelse,What is query-aware contextualization and what effect did it have?,lost_in_the_middle.pdf,8|2,"Placing the query before and after the documents or key-value pairs; near-perfect on key-value retrieval, but little effect on multi-document QA"
+forstaelse,Are extended-context models better at using their input context than the standard versions?,lost_in_the_middle.pdf,5|6|2,"No, their performance is nearly identical when the input fits in both context windows"
+forstaelse,How do encoder-decoder models behave compared with decoder-only models?,lost_in_the_middle.pdf,7|8|2,"Relatively robust to the position of relevant information within their training-time sequence length, but show a U-shaped curve on longer sequences"
+forstaelse,Which phenomenon from psychology do the authors compare their results to?,lost_in_the_middle.pdf,10|11,The serial-position effect [optional: people remember the first and last items of a list best]
+omformulert,Does giving the model 50 retrieved passages instead of 20 help much?,lost_in_the_middle.pdf,10|3,Only marginally: about 1.5% for GPT-3.5-Turbo and about 1% for Claude-1.3
+omformulert,Which models had no trouble finding the right value in the JSON task?,lost_in_the_middle.pdf,6,"Claude-1.3 and Claude-1.3 (100K), nearly perfect at all input lengths"
+omformulert,"What do the authors suggest doing with retrieved documents, given their findings?",lost_in_the_middle.pdf,10,"Reranking so relevant information is closer to the start, or ranked list truncation (retrieving fewer documents)"
+omformulert,Is instruction fine-tuning the cause of the U-shaped curve?,lost_in_the_middle.pdf,9,"No, the base model MPT-30B also shows a U-shaped curve [optional: fine-tuning reduces the best-worst gap from about 10% to about 4%]"
+ubesvarbar,How many GPUs were used to run the experiments?,lost_in_the_middle.pdf,none,Not in the paper
+ubesvarbar,What was the total cost of the GPT-3.5-Turbo experiments?,lost_in_the_middle.pdf,none,Not in the paper; only a cost estimate for GPT-4 is given
+ubesvarbar,What accuracy did Gemini achieve on multi-document QA?,lost_in_the_middle.pdf,none,Not in the paper; Gemini is not evaluated
