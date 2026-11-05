@@ -1,0 +1,5 @@
+﻿What is the closed-book accuracy of GPT-3.5-Turbo on the multi-document QA task?
+Does performance drop when the relevant document is in the middle of the context, and why might that happen?
+What is query-aware contextualization and what effect did it have?
+Which phenomenon from psychology do the authors compare their results to?
+How much did the authors spend on API costs for their experiments?
