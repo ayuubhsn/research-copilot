@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { collapse, splitCitations } from "@/lib/text";
-import type { Chunk, DocumentInfo, SourceHit } from "@/lib/types";
+import type { Claim, DocumentInfo, SourceHit } from "@/lib/types";
 import ScoutSteps from "./ScoutSteps";
 import type { Turn } from "./Workspace";
 
@@ -11,14 +11,14 @@ type Props = {
   activeId: number | null;
   doc: DocumentInfo;
   suggestions: string[];
-  chunks: Chunk[];
   onAsk: (q: string) => void;
   onFocus: (id: number) => void;
   onCite: (page: number) => void;
   onSource: (hit: SourceHit) => void;
+  onClaim: (claim: Claim) => void;
 };
 
-export default function Thread({ turns, activeId, doc, suggestions, onAsk, onFocus, onCite, onSource }: Props) {
+export default function Thread({ turns, activeId, doc, suggestions, onAsk, onFocus, onCite, onSource, onClaim }: Props) {
   const bottom = useRef<HTMLDivElement>(null);
   const last = turns[turns.length - 1];
 
@@ -40,6 +40,7 @@ export default function Thread({ turns, activeId, doc, suggestions, onAsk, onFoc
             onFocus={() => onFocus(turn.id)}
             onCite={onCite}
             onSource={onSource}
+            onClaim={onClaim}
           />
         ))}
         <div ref={bottom} />
@@ -85,9 +86,10 @@ type TurnProps = {
   onFocus: () => void;
   onCite: (page: number) => void;
   onSource: (hit: SourceHit) => void;
+  onClaim: (claim: Claim) => void;
 };
 
-function TurnView({ turn, active, onFocus, onCite, onSource }: TurnProps) {
+function TurnView({ turn, active, onFocus, onCite, onSource, onClaim }: TurnProps) {
   const result = turn.result;
   const done = turn.status === "done" && result;
 
@@ -133,7 +135,7 @@ function TurnView({ turn, active, onFocus, onCite, onSource }: TurnProps) {
               </p>
             )}
             <Answer text={result.answer} onCite={onCite} />
-            <FactCheck claims={result.claims} removed={result.removed} gaveUp={result.gaveUp} />
+            <FactCheck claims={result.claims} removed={result.removed} gaveUp={result.gaveUp} onClaim={onClaim} />
             <Sources sources={result.sources} onSource={onSource} />
           </div>
         )}
@@ -183,7 +185,9 @@ export function Answer({ text, onCite }: { text: string; onCite: (page: number) 
   );
 }
 
-function FactCheck({ claims, removed, gaveUp }: { claims: { claim: string; supported: boolean; evidence?: string }[]; removed: number; gaveUp: boolean }) {
+type FactCheckProps = { claims: Claim[]; removed: number; gaveUp: boolean; onClaim: (claim: Claim) => void };
+
+function FactCheck({ claims, removed, gaveUp, onClaim }: FactCheckProps) {
   const [open, setOpen] = useState(false);
   if (gaveUp || claims.length === 0) return null;
   const ok = removed === 0;
@@ -216,7 +220,23 @@ function FactCheck({ claims, removed, gaveUp }: { claims: { claim: string; suppo
                 <span className={c.supported ? "text-mint" : "text-bad"}>{c.supported ? "✓" : "✗"}</span>
                 <span className={c.supported ? "text-soft" : "text-bad line-through"}>{c.claim}</span>
               </div>
-              {c.evidence && <div className="mt-1 ml-5 font-serif text-[15px] text-muted italic">“{c.evidence}”</div>}
+              {c.evidence && (
+                <div className="mt-1 ml-5 flex items-start gap-2">
+                  {c.page && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClaim(c);
+                      }}
+                      title="Show this quote in the PDF"
+                      className="mt-0.5 shrink-0 rounded bg-raised px-1.5 py-px font-mono text-[11px] text-muted transition hover:bg-accent hover:text-ink"
+                    >
+                      p.{c.page}
+                    </button>
+                  )}
+                  <span className="font-serif text-[15px] text-muted italic">“{c.evidence}”</span>
+                </div>
+              )}
             </li>
           ))}
         </ul>

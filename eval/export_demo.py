@@ -1,10 +1,10 @@
 """
-Lager dataene til "Prøv selv"-delen på landingssiden.
+Lager dataene til demo-modusen i web-appen.
 
-Kjører appen på én offentlig artikkel og noen spørsmål, og lagrer alt
-landingssiden trenger i én JSON-fil: sidetekst, kunnskapskart, svar fra
-vanlig RAG med faktasjekk, og Scouts steg. Landingssiden spiller av
-disse kjøringene, så den trenger verken backend eller API-nøkkel.
+Kjører pipelinen på én artikkel og noen spørsmål, og lagrer alt appen
+trenger i én JSON-fil: sidetekst, kunnskapskart, svar fra vanlig RAG med
+faktasjekk, og Scouts steg. Demo-modusen spiller av disse kjøringene, så
+den trenger verken backend eller API-nøkkel.
 
 Bruk bare artikler med en lisens som tillater gjenbruk (f.eks. CC BY),
 siden sideteksten publiseres sammen med siden.

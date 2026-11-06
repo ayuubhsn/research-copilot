@@ -42,3 +42,6 @@ next-env.d.ts
 
 # recorded demo runs: they contain text from the paper, so they stay local
 /public/demo/
+
+# copied from pdfjs-dist on npm install
+/public/pdf.worker.min.mjs

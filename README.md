@@ -15,6 +15,7 @@ Built as a retrieval-augmented generation (RAG) pipeline with a search agent, a 
 - **Scout**, a search agent that rephrases weak searches and stops when an answer isn't there
 - **Fact-checking**: claims the sources don't support are removed before the answer is shown
 - **Knowledge map**: every passage placed on a 2D map by meaning, so the paper's topics show up as islands
+- **See the proof in the PDF**: the original page opens with the passage highlighted, and each fact-checked claim can highlight the exact quote that supports it
 
 ## How it works
 
@@ -105,35 +106,45 @@ A stricter checking prompt gave the same result, so the simpler one is used.
 
 ## Tech stack
 
-Python, Streamlit, PyMuPDF, Sentence Transformers (`all-MiniLM-L6-v2`), FAISS, rank-bm25, UMAP, scikit-learn, Plotly, OpenAI GPT-4o-mini
+- **Pipeline:** Python, PyMuPDF, Sentence Transformers (`all-MiniLM-L6-v2`), FAISS, rank-bm25, UMAP, scikit-learn, OpenAI GPT-4o-mini
+- **Backend:** FastAPI, tested with pytest
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS, pdf.js
+
+The first version used Streamlit (`app.py`); the Next.js app replaces it.
 
 ## Getting started
 
-1. Clone the repository
+You need Python 3.11+, Node.js 20+ and an OpenAI API key.
+
+1. Clone the repository and install the Python packages
    ```bash
    git clone https://github.com/ayuubhsn/research-copilot.git
    cd research-copilot
-   ```
-2. Create and activate a virtual environment
-   ```bash
    python -m venv .venv
-   # Windows
-   .venv\Scripts\activate
-   # macOS / Linux
-   source .venv/bin/activate
-   ```
-3. Install dependencies
-   ```bash
+   .venv\Scripts\activate        # Windows
+   source .venv/bin/activate      # macOS / Linux
    pip install -r requirements.txt
    ```
-4. Create a `.env` file with your OpenAI API key
+2. Create a `.env` file with your OpenAI API key
    ```
    OPENAI_API_KEY=your-key-here
    ```
-5. Start the app
+3. Start the backend (API docs at http://localhost:8000/docs)
    ```bash
-   streamlit run app.py
+   uvicorn api.main:app --reload
    ```
+4. In a second terminal, start the web app
+   ```bash
+   cd web
+   npm install
+   npm run dev
+   ```
+   with a file `web/.env.local` containing `NEXT_PUBLIC_API_URL=http://localhost:8000`
+5. Open http://localhost:3000 and upload a PDF.
+
+Without `NEXT_PUBLIC_API_URL`, the web app runs in demo mode and replays recorded answers (see [`web/README.md`](web/README.md)).
+
+Run the backend tests with `python -m pytest tests`. They replace the embedding model and OpenAI with simple stand-ins, so they need no network or API key.
 
 ## Running the evaluation
 
@@ -153,8 +164,7 @@ Retrieval and the map run without an API key; the others call the OpenAI API. To
 
 ```
 research-copilot/
-├── app.py                   # Streamlit interface
-├── src/
+├── src/                     # the pipeline
 │   ├── pdf_processor.py     # Text per page
 │   ├── chunking.py          # Sentence-based chunking and noise filter
 │   ├── rag.py               # Embeddings, FAISS, BM25, hybrid search, neighbouring chunks
@@ -162,11 +172,12 @@ research-copilot/
 │   ├── scout.py             # Search agent
 │   ├── fact_check.py        # Claim-by-claim fact-checking
 │   └── knowledge_map.py     # UMAP layout and topic islands
-└── eval/
-    ├── control_questions.csv
-    ├── evaluate.py
-    ├── evaluate_answers.py
-    ├── evaluate_fact_check.py
-    ├── plot_map.py
-    └── try_scout.py
+├── api/                     # FastAPI backend
+│   ├── main.py              # Endpoints: upload, pages, map, ask
+│   ├── store.py             # Saves each PDF and its index to disk
+│   └── locate.py            # Finds a passage on the PDF page for highlighting
+├── web/                     # Next.js frontend
+├── tests/                   # Backend tests
+├── eval/                    # Test sets and evaluation scripts
+└── app.py                   # First version (Streamlit)
 ```

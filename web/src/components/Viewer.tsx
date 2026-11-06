@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { highlightPage } from "@/lib/text";
-import type { Chunk, KnowledgeMap, Page, SourceHit } from "@/lib/types";
-import type { Turn } from "./Workspace";
+import type { DocumentInfo, SourceHit } from "@/lib/types";
+import PdfPage, { type Highlight } from "./PdfPage";
+import type { DocData, Focus, Turn } from "./Workspace";
 
 export type ViewerTab = "page" | "map";
 
 type Props = {
   tab: ViewerTab;
   setTab: (t: ViewerTab) => void;
-  pages: Page[];
-  chunks: Chunk[];
-  map: KnowledgeMap;
-  page: number;
+  doc: DocumentInfo;
+  fileUrl: string | null; // the original PDF; null in the demo, which shows the page text instead
+  data: DocData;
+  focus: Focus;
   setPage: (p: number) => void;
-  activeChunk: number | null;
   turn: Turn | null;
   onSource: (hit: SourceHit) => void;
 };
@@ -48,26 +48,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function PageView({ pages, chunks, page, setPage, activeChunk, turn }: Props) {
-  const current = pages.find((p) => p.page === page) ?? pages[0];
+function PageView({ doc, fileUrl, data, focus, setPage, turn }: Props) {
   const sources = useMemo(() => (turn?.status === "done" ? (turn.result?.sources ?? []) : []), [turn]);
   const sourcePages = [...new Set(sources.map((s) => s.page))].sort((a, b) => a - b);
-  const markRef = useRef<HTMLElement | null>(null);
-
-  const segments = useMemo(() => {
-    const onPage = sources.filter((s) => s.page === current.page).map((s) => s.text);
-    const active = activeChunk != null && chunks[activeChunk]?.page === current.page ? chunks[activeChunk].text : null;
-    // Without a chosen passage, the strongest hit on the page is the focus
-    return highlightPage(current.text, onPage, active ?? onPage[0] ?? null);
-  }, [current, sources, activeChunk, chunks]);
-
-  useEffect(() => {
-    markRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [segments]);
-
-  const firstActive = segments.findIndex((seg) => seg.mark === "active");
-  const first = pages[0].page;
-  const last = pages[pages.length - 1].page;
+  const page = Math.min(Math.max(focus.page, 1), doc.pageCount);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -79,7 +63,7 @@ function PageView({ pages, chunks, page, setPage, activeChunk, turn }: Props) {
               key={p}
               onClick={() => setPage(p)}
               className={`rounded px-1.5 py-px font-mono text-xs transition ${
-                p === current.page ? "bg-accent text-ink" : "bg-raised text-muted hover:text-text"
+                p === page ? "bg-accent text-ink" : "bg-raised text-muted hover:text-text"
               }`}
             >
               p.{p}
@@ -87,46 +71,88 @@ function PageView({ pages, chunks, page, setPage, activeChunk, turn }: Props) {
           ))}
         </div>
         <div className="flex items-center gap-1 font-mono text-xs text-muted">
-          <PagerButton disabled={current.page <= first} onClick={() => setPage(current.page - 1)} label="Previous page">
+          <PagerButton disabled={page <= 1} onClick={() => setPage(page - 1)} label="Previous page">
             ‹
           </PagerButton>
           <span className="px-1">
-            page {current.page} of {last}
+            page {page} of {doc.pageCount}
           </span>
-          <PagerButton disabled={current.page >= last} onClick={() => setPage(current.page + 1)} label="Next page">
+          <PagerButton disabled={page >= doc.pageCount} onClick={() => setPage(page + 1)} label="Next page">
             ›
           </PagerButton>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-        <article className="rounded-md bg-paper px-6 py-7 text-ink shadow-xl shadow-black/40 sm:px-8">
-          <div className="mb-5 flex justify-between font-mono text-[11px] text-ink-soft">
-            <span>{turn?.result ? "" : "Ask a question to see where the answer comes from"}</span>
-            <span>p. {current.page}</span>
-          </div>
-          <p className="font-serif text-[16.5px] leading-[1.75] break-words hyphens-auto">
-            {segments.map((seg, i) => {
-              if (seg.mark === "none") return <span key={i}>{seg.text}</span>;
-              const isFirst = i === firstActive;
-              return (
-                <mark
-                  key={i}
-                  ref={isFirst ? (el) => void (markRef.current = el) : undefined}
-                  className={
-                    seg.mark === "active"
-                      ? "rounded-[2px] bg-accent px-0.5 text-ink"
-                      : "rounded-[2px] bg-accent/25 text-ink underline decoration-accent decoration-2 underline-offset-2"
-                  }
-                >
-                  {seg.text}
-                </mark>
-              );
-            })}
-          </p>
-        </article>
+        {fileUrl ? (
+          <PdfPage url={fileUrl} page={page} highlights={pdfHighlights(sources, page, focus)} />
+        ) : (
+          <TextPage data={data} page={page} focus={focus} sources={sources} hasResult={!!turn?.result} />
+        )}
       </div>
     </div>
+  );
+}
+
+// Every passage used on this page is marked lightly; the one in focus strongly
+function pdfHighlights(sources: SourceHit[], page: number, focus: Focus): Highlight[] {
+  const onPage = sources.filter((s) => s.page === page && s.rects?.length);
+  const highlights: Highlight[] = onPage.map((s) => ({ rects: s.rects!, strong: false }));
+  if (focus.page === page && focus.rects) {
+    highlights.push({ rects: focus.rects, strong: true });
+  } else if (onPage[0]) {
+    const focused = onPage.find((s) => s.chunk === focus.chunk) ?? onPage[0];
+    highlights.push({ rects: focused.rects!, strong: true });
+  }
+  return highlights;
+}
+
+type TextPageProps = { data: DocData; page: number; focus: Focus; sources: SourceHit[]; hasResult: boolean };
+
+// The demo cannot publish the PDF itself, so it shows the extracted text of the page
+function TextPage({ data, page, focus, sources, hasResult }: TextPageProps) {
+  const current = data.pages.find((p) => p.page === page) ?? data.pages[0];
+  const markRef = useRef<HTMLElement | null>(null);
+
+  const segments = useMemo(() => {
+    const onPage = sources.filter((s) => s.page === current.page).map((s) => s.text);
+    const chunk = focus.chunk != null ? data.chunks[focus.chunk] : null;
+    const active = chunk && chunk.page === current.page ? chunk.text : null;
+    // Without a chosen passage, the strongest hit on the page is the focus
+    return highlightPage(current.text, onPage, active ?? onPage[0] ?? null);
+  }, [current, sources, focus, data.chunks]);
+
+  useEffect(() => {
+    markRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [segments]);
+
+  const firstActive = segments.findIndex((seg) => seg.mark === "active");
+
+  return (
+    <article className="rounded-md bg-paper px-6 py-7 text-ink shadow-xl shadow-black/40 sm:px-8">
+      <div className="mb-5 flex justify-between font-mono text-[11px] text-ink-soft">
+        <span>{hasResult ? "" : "Ask a question to see where the answer comes from"}</span>
+        <span>p. {current.page}</span>
+      </div>
+      <p className="font-serif text-[16.5px] leading-[1.75] break-words hyphens-auto">
+        {segments.map((seg, i) => {
+          if (seg.mark === "none") return <span key={i}>{seg.text}</span>;
+          return (
+            <mark
+              key={i}
+              ref={i === firstActive ? (el) => void (markRef.current = el) : undefined}
+              className={
+                seg.mark === "active"
+                  ? "rounded-[2px] bg-accent px-0.5 text-ink"
+                  : "rounded-[2px] bg-accent/25 text-ink underline decoration-accent decoration-2 underline-offset-2"
+              }
+            >
+              {seg.text}
+            </mark>
+          );
+        })}
+      </p>
+    </article>
   );
 }
 
@@ -145,7 +171,9 @@ function PagerButton({ disabled, onClick, label, children }: { disabled: boolean
 
 export const ISLAND_COLORS = ["#7CC4A4", "#8CA3FF", "#E9A86B", "#C99BE0", "#6FC3D9", "#D9C36F", "#E58A9A", "#9AB87A"];
 
-function MapView({ map, chunks, turn, onSource, activeChunk }: Props) {
+function MapView({ data, turn, onSource, focus }: Props) {
+  const { map, chunks } = data;
+  const activeChunk = focus.chunk;
   const [hover, setHover] = useState<number | null>(null);
   const result = turn?.status === "done" ? turn.result : undefined;
   const hitScore = new Map((result?.sources ?? []).map((s) => [s.chunk, s.score]));

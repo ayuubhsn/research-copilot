@@ -1,21 +1,21 @@
 """
 Kunnskapskart: plasserer tekstbitene i et 2D-kart etter betydning.
- 
+
 Biter som handler om det samme havner nær hverandre, så dokumentet
 deler seg i "øyer" (temaer). Et spørsmål plasseres der svarene ble
 funnet, slik at man ser hvor i dokumentet søket leter.
 """
- 
+
 import numpy as np
 import umap
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
- 
- 
+
+
 def build_map(embeddings, chunks, n_islands=6, seed=42):
     """Lager kartet: 2D-posisjon for hver tekstbit, pluss øyer med temanavn."""
     n = len(embeddings)
- 
+
     # UMAP trykker 384 dimensjoner ned til 2, men beholder hvem som er naboer.
     # cosine passer fordi søket også bruker cosine similarity.
     reducer = umap.UMAP(
@@ -25,16 +25,18 @@ def build_map(embeddings, chunks, n_islands=6, seed=42):
         random_state=seed,
     )
     coords = reducer.fit_transform(embeddings)
- 
+
     # Skalerer til 0–100 med litt luft i kantene, så frontenden kan bruke prosent
     mins = coords.min(axis=0)
     maxs = coords.max(axis=0)
-    scaled = 5 + 90 * (coords - mins) / (maxs - mins)
- 
+    # Hvis alle punktene ligger likt langs en akse (f.eks. bare like tekstbiter), unngå deling på null
+    span = np.where(maxs - mins > 0, maxs - mins, 1.0)
+    scaled = 5 + 90 * (coords - mins) / span
+
     # Øyer: grupperer bitene i originalrommet (ikke 2D), så gruppene blir mer presise
     k = min(n_islands, n)
     island_ids = KMeans(n_clusters=k, random_state=seed, n_init=10).fit_predict(embeddings)
- 
+
     points = []
     for i, chunk in enumerate(chunks):
         points.append(
@@ -46,9 +48,9 @@ def build_map(embeddings, chunks, n_islands=6, seed=42):
                 "island": int(island_ids[i]),
             }
         )
- 
+
     labels = island_labels(chunks, island_ids, k)
- 
+
     islands = []
     for island in range(k):
         members = [p for p in points if p["island"] == island]
@@ -61,13 +63,13 @@ def build_map(embeddings, chunks, n_islands=6, seed=42):
                 "size": len(members),
             }
         )
- 
+
     return {"points": points, "islands": islands}
- 
- 
+
+
 def island_labels(chunks, island_ids, k, words_per_label=3):
     """Gir hver øy et navn: ordene som er mest typiske for akkurat den øya.
- 
+
     All tekst i en øy slås sammen til ett "dokument". TF-IDF gir høy score til
     ord som er vanlige i én øy, men sjeldne i de andre.
     """
@@ -82,7 +84,7 @@ def island_labels(chunks, island_ids, k, words_per_label=3):
     )
     matrix = vectorizer.fit_transform(island_texts).toarray()
     vocab = vectorizer.get_feature_names_out()
- 
+
     labels = []
     for row in matrix:
         words, stems = [], set()
@@ -96,11 +98,11 @@ def island_labels(chunks, island_ids, k, words_per_label=3):
                 break
         labels.append(" · ".join(words))
     return labels
- 
- 
+
+
 def place_question(points, hit_indices, scores):
     """Plasserer spørsmålet midt mellom de beste treffene, vektet etter score.
- 
+
     Dette er et visningsvalg: 2D-kartet er en forenkling, så å projisere selve
     spørsmålet kan gi lange, misvisende linjer. Her havner spørsmålet der svaret
     faktisk ble funnet. Treffene med høyest score trekker mest.
@@ -112,4 +114,3 @@ def place_question(points, hit_indices, scores):
         "x": round(float(np.average(xs, weights=weights)), 2),
         "y": round(float(np.average(ys, weights=weights)), 2),
     }
- 

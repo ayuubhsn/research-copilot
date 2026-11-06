@@ -12,17 +12,21 @@ export function Logo({ size = 22 }: { size?: number }) {
   );
 }
 
-export default function TopBar({ doc, live }: { doc: DocumentInfo; live: boolean }) {
+export default function TopBar({ doc, live }: { doc: DocumentInfo | null; live: boolean }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel-2 px-4 py-3">
       <div className="flex min-w-0 items-center gap-2.5 text-sm">
         <Logo />
         <span className="font-semibold tracking-tight">ResearchCopilot</span>
-        <span className="text-dim">/</span>
-        <span className="truncate font-mono text-[13px] text-soft">{doc.file}</span>
-        <span className="hidden font-mono text-xs text-muted sm:inline">
-          {doc.pageCount} pages · {doc.passages} passages
-        </span>
+        {doc && (
+          <>
+            <span className="text-dim">/</span>
+            <span className="truncate font-mono text-[13px] text-soft">{doc.file}</span>
+            <span className="hidden font-mono text-xs text-muted sm:inline">
+              {doc.pageCount} pages · {doc.passages} passages
+            </span>
+          </>
+        )}
       </div>
       <div className="flex items-center gap-3">
         {!live && (
