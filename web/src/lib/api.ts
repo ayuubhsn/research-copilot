@@ -6,6 +6,10 @@ import type { AskResult, Chunk, DemoData, DocumentInfo, KnowledgeMap, Mode, Page
 export interface ResearchApi {
   readonly live: boolean;
   documents(): Promise<DocumentInfo[]>;
+  upload(file: File): Promise<DocumentInfo>;
+  remove(docId: string): Promise<void>;
+  // URL of the original PDF, or null when only the text is available (demo)
+  fileUrl(docId: string): string | null;
   pages(docId: string): Promise<Page[]>;
   chunks(docId: string): Promise<Chunk[]>;
   map(docId: string): Promise<KnowledgeMap>;
@@ -36,6 +40,11 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
   return {
     live: false,
     documents: async () => [doc],
+    upload: async () => {
+      throw new Error("Uploading needs the backend.");
+    },
+    remove: async () => {},
+    fileUrl: () => null,
     pages: async () => data.paper.pages,
     chunks: async () => data.chunks,
     map: async () => data.map,
@@ -88,4 +97,61 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
       };
     },
   };
+}
+
+// Starter questions that work for most research papers
+const GENERIC_QUESTIONS = [
+  "What research question does this paper ask?",
+  "What method or data do the authors use?",
+  "What are the main findings?",
+  "What limitations do the authors mention?",
+];
+
+export class ApiError extends Error {}
+
+// The FastAPI backend in api/main.py
+export function createHttpApi(baseUrl: string): ResearchApi {
+  const base = baseUrl.replace(/\/$/, "");
+
+  async function call<T>(path: string, init?: RequestInit): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(base + path, init);
+    } catch {
+      throw new ApiError(`Could not reach the backend at ${base}. Is it running?`);
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new ApiError(body?.detail ?? `The backend answered ${response.status}.`);
+    }
+    return response.status === 204 ? (undefined as T) : response.json();
+  }
+
+  return {
+    live: true,
+    documents: () => call("/documents"),
+    upload(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return call("/documents", { method: "POST", body: form });
+    },
+    remove: (docId) => call(`/documents/${docId}`, { method: "DELETE" }),
+    fileUrl: (docId) => `${base}/documents/${docId}/file`,
+    pages: (docId) => call(`/documents/${docId}/pages`),
+    chunks: (docId) => call(`/documents/${docId}/chunks`),
+    map: (docId) => call(`/documents/${docId}/map`),
+    suggestions: async () => GENERIC_QUESTIONS,
+    ask: (docId, question, mode) =>
+      call(`/documents/${docId}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, mode }),
+      }),
+  };
+}
+
+// Uses the backend when NEXT_PUBLIC_API_URL is set, otherwise the recorded demo
+export async function createApi(): Promise<ResearchApi> {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  return url ? createHttpApi(url) : createDemoApi();
 }

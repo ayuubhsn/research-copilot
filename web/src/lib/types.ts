@@ -8,7 +8,11 @@ export type MapPoint = { x: number; y: number; island: number; page: number };
 export type Island = { id: number; x: number; y: number; label: string; size: number };
 export type KnowledgeMap = { points: MapPoint[]; islands: Island[] };
 
-export type Claim = { claim: string; supported: boolean; evidence?: string };
+// A highlight on a PDF page, as fractions (0–1) of the page width and height
+export type Rect = { x: number; y: number; w: number; h: number };
+
+// page and rects are set when the backend found the supporting quote in the PDF
+export type Claim = { claim: string; supported: boolean; evidence?: string; page?: number | null; rects?: Rect[] };
 
 export type SourceHit = {
   chunk: number;
@@ -16,6 +20,7 @@ export type SourceHit = {
   score: number;
   phrase_match?: boolean;
   text: string;
+  rects?: Rect[];
 };
 
 export type TraceStep =
