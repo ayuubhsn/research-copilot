@@ -44,4 +44,4 @@ next-env.d.ts
 /public/demo/
 
 # copied from pdfjs-dist on npm install
-/public/pdf.worker.min.mjs
+/public/pdfjs/

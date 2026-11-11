@@ -8,14 +8,31 @@ Built as a retrieval-augmented generation (RAG) pipeline with a search agent, a 
 
 ## Features
 
-- Upload multiple PDFs and search across all of them
-- Answers cite the source file and page for every claim
-- Says clearly when the answer is not in the documents instead of guessing
-- **Hybrid search**: combines meaning (embeddings) with exact words (BM25)
-- **Scout**, a search agent that rephrases weak searches and stops when an answer isn't there
-- **Fact-checking**: claims the sources don't support are removed before the answer is shown
-- **Knowledge map**: every passage placed on a 2D map by meaning, so the paper's topics show up as islands
-- **See the proof in the PDF**: the original page opens with the passage highlighted, and each fact-checked claim can highlight the exact quote that supports it
+**Ask**
+- Answers come only from your papers, with the file and page behind every claim, and say clearly when the answer is not there
+- **Hybrid search** combines meaning (embeddings) with exact words (BM25)
+- **Scout**, an optional search agent, rephrases weak searches and shows every step
+- **Fact-checking** gives each claim a status: *supported*, *partly supported* or *unsupported*. Unsupported claims are removed from the answer, but shown with the reason, never dropped silently.
+
+**Check the evidence**
+- The original PDF opens with the passage highlighted, and each claim can highlight the exact quote that supports it
+
+**Find again**
+- Search every paper in your own words ("models did worst when the answer was in the middle") and get the exact passage, paper and page. No language model is involved, so it is instant and free.
+
+**Notebook and citations**
+- Select text in a PDF and save it, or save a search hit or a passage from an answer. Every quote keeps its paper and page, and you can add notes and tags.
+- Copy a quote with an in-text citation, or the whole reference list, in **APA 7, Harvard, MLA 9, Chicago or IEEE**
+- Paper details (authors, year, journal) are looked up from the DOI when a PDF is uploaded, and can be corrected
+- Export to Zotero and other reference managers as BibTeX or RIS
+
+**Knowledge map**
+- Every passage placed on a 2D map by meaning, so the paper's topics show up as islands
+
+## How is this different from Zotero or NotebookLM?
+
+- **Zotero** organises and cites papers, but does not read them. ResearchCopilot answers questions about what the papers say and shows the proof. It works alongside Zotero: references export as BibTeX or RIS.
+- **NotebookLM** also answers from your sources with citations. ResearchCopilot adds three things: the passage is highlighted in the original PDF, every claim is fact-checked with a visible status and reason, and the pipeline is measured with its own test sets (below). It is also open source.
 
 ## How it works
 
@@ -88,6 +105,10 @@ The normal test sets contain few errors to catch, so one false claim was planted
 
 A stricter checking prompt gave the same result, so the simpler one is used.
 
+The checker now gives three statuses instead of two (*supported*, *partly supported*, *unsupported*), so a claim that is mostly right but adds a detail the sources don't mention is flagged instead of removed. `eval/evaluate_fact_check.py` compares the two versions on the same planted errors.
+
+<!-- Results for three statuses vs. two: add after running eval/evaluate_fact_check.py -->
+
 ### What the evaluation showed
 
 - **Prompt fixes.** Early answers were sometimes in the wrong language and once cited a file name copied from an example in the prompt.
@@ -101,6 +122,8 @@ A stricter checking prompt gave the same result, so the simpler one is used.
 
 - On the control set, the right page was found for a question but the model still said the answer was missing. One hypothesis, not yet tested: the answer sat in the middle of a long context, the effect the control paper itself describes.
 - The fact-checker misses some real errors, for example a misspelt method name.
+- Paper details for references come from the DOI. Without a DOI (or offline), title and year are guessed from the PDF and the authors must be filled in by hand.
+- Find again ranks passages within each paper with hybrid search and merges papers by similarity, so a paper with many near-matches can crowd out a single exact one.
 - Questions in another language than the paper perform poorly.
 - The test sets are small, so the numbers show relative improvements rather than general accuracy.
 
@@ -173,9 +196,11 @@ research-copilot/
 │   ├── fact_check.py        # Claim-by-claim fact-checking
 │   └── knowledge_map.py     # UMAP layout and topic islands
 ├── api/                     # FastAPI backend
-│   ├── main.py              # Endpoints: upload, pages, map, ask
+│   ├── main.py              # Endpoints: upload, ask, search, notebook, citations
 │   ├── store.py             # Saves each PDF and its index to disk
-│   └── locate.py            # Finds a passage on the PDF page for highlighting
+│   ├── locate.py            # Finds a passage on the PDF page for highlighting
+│   ├── metadata.py          # Paper details from the DOI, or guessed from the PDF
+│   └── notebook.py          # Saved quotes, notes and tags
 ├── web/                     # Next.js frontend
 ├── tests/                   # Backend tests
 ├── eval/                    # Test sets and evaluation scripts

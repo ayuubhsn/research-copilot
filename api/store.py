@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pymupdf
 
+from api.metadata import lookup
 from src.chunking import chunk_pages
 from src.knowledge_map import build_map
 from src.pdf_processor import extract_pages
@@ -40,13 +41,20 @@ class Document:
     index: object
     map: dict
     folder: Path
+    citation: dict
 
     @property
     def pdf_path(self):
         return self.folder / "original.pdf"
 
     def info(self):
-        return {"id": self.id, "file": self.file, "pageCount": self.page_count, "passages": len(self.chunks)}
+        return {
+            "id": self.id,
+            "file": self.file,
+            "pageCount": self.page_count,
+            "passages": len(self.chunks),
+            "citation": self.citation,
+        }
 
 
 class Store:
@@ -87,20 +95,32 @@ class Store:
         if not chunks:
             raise UploadError("No text found in the PDF. Scanned PDFs without a text layer are not supported yet.")
 
+        citation = lookup(pdf_bytes, pages, filename)
         embeddings = create_embeddings(chunks, self.model)
         knowledge_map = build_map(embeddings, chunks) if len(chunks) >= MIN_CHUNKS_FOR_MAP else {"points": [], "islands": []}
 
         folder = self.folder / doc_id
         folder.mkdir(exist_ok=True)
         (folder / "original.pdf").write_bytes(pdf_bytes)
-        (folder / "meta.json").write_text(json.dumps({"id": doc_id, "file": filename, "page_count": page_count}))
+        meta = {"id": doc_id, "file": filename, "page_count": page_count, "citation": citation}
+        (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False))
         (folder / "pages.json").write_text(json.dumps(pages, ensure_ascii=False))
         (folder / "chunks.json").write_text(json.dumps(chunks, ensure_ascii=False))
         (folder / "map.json").write_text(json.dumps(knowledge_map))
         np.save(folder / "embeddings.npy", embeddings)
 
-        doc = Document(doc_id, filename, page_count, pages, chunks, embeddings, create_faiss_index(embeddings), knowledge_map, folder)
+        doc = Document(
+            doc_id, filename, page_count, pages, chunks, embeddings, create_faiss_index(embeddings), knowledge_map, folder, citation
+        )
         self.docs[doc_id] = doc
+        return doc
+
+    def set_citation(self, doc_id, citation):
+        doc = self.docs[doc_id]
+        doc.citation = citation
+        meta = json.loads((doc.folder / "meta.json").read_text())
+        meta["citation"] = citation
+        (doc.folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False))
         return doc
 
     def delete(self, doc_id):
@@ -114,14 +134,20 @@ class Store:
     def _load(self, folder):
         meta = json.loads((folder / "meta.json").read_text())
         embeddings = np.load(folder / "embeddings.npy")
+        pages = json.loads((folder / "pages.json").read_text())
+        if "citation" not in meta:
+            # Lastet opp før kildeinfo fantes: slå den opp nå og lagre den
+            meta["citation"] = lookup((folder / "original.pdf").read_bytes(), pages, meta["file"])
+            (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False))
         return Document(
             id=meta["id"],
             file=meta["file"],
             page_count=meta["page_count"],
-            pages=json.loads((folder / "pages.json").read_text()),
+            pages=pages,
             chunks=json.loads((folder / "chunks.json").read_text()),
             embeddings=embeddings,
             index=create_faiss_index(embeddings),
             map=json.loads((folder / "map.json").read_text()),
             folder=folder,
+            citation=meta["citation"],
         )

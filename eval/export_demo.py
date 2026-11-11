@@ -59,7 +59,7 @@ def main():
         # Vanlig RAG: ett søk, svar, faktasjekk
         results = search_chunks(question, model, index, chunks, top_k=TOP_K)
         draft = generate_answer(question, results)
-        checked = check_answer(question, draft, results, mode="basic")
+        checked = check_answer(question, draft, results)
 
         # Scout: agenten søker selv, og hvert steg logges
         scout = run_scout(question, model, index, chunks, top_k=TOP_K, check=True)

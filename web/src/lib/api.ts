@@ -1,4 +1,16 @@
-import type { AskResult, Chunk, DemoData, DocumentInfo, KnowledgeMap, Mode, Page, SourceHit } from "./types";
+import type {
+  AskResult,
+  Chunk,
+  Citation,
+  DemoData,
+  DocumentInfo,
+  KnowledgeMap,
+  Mode,
+  Note,
+  Page,
+  SearchHit,
+  SourceHit,
+} from "./types";
 
 // Everything the UI needs from a backend. The demo implementation below
 // replays pre-recorded runs; a FastAPI implementation can replace it later
@@ -15,7 +27,20 @@ export interface ResearchApi {
   map(docId: string): Promise<KnowledgeMap>;
   suggestions(docId: string): Promise<string[]>;
   ask(docId: string, question: string, mode: Mode): Promise<AskResult>;
+  updateCitation(docId: string, citation: Citation): Promise<DocumentInfo>;
+  // Looks up paper details from a DOI, or searches a title; nothing is saved
+  lookupCitation(docId: string, query: { doi?: string; title?: string }): Promise<Citation>;
+  // Find again: search across the library, no language model involved
+  search(query: string, docIds?: string[]): Promise<SearchHit[]>;
+  notes(): Promise<Note[]>;
+  addNote(note: { docId: string; page: number; text: string; note?: string; tags?: string[] }): Promise<Note>;
+  updateNote(id: string, patch: { note?: string; tags?: string[] }): Promise<Note>;
+  deleteNote(id: string): Promise<void>;
 }
+
+const needsBackend = async (): Promise<never> => {
+  throw new Error("This needs the backend. The demo only replays recorded answers.");
+};
 
 export class DemoUnsupportedQuestion extends Error {}
 
@@ -45,6 +70,13 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
     },
     remove: async () => {},
     fileUrl: () => null,
+    updateCitation: needsBackend,
+    lookupCitation: needsBackend,
+    search: needsBackend,
+    notes: async () => [],
+    addNote: needsBackend,
+    updateNote: needsBackend,
+    deleteNote: needsBackend,
     pages: async () => data.paper.pages,
     chunks: async () => data.chunks,
     map: async () => data.map,
@@ -109,6 +141,12 @@ const GENERIC_QUESTIONS = [
 
 export class ApiError extends Error {}
 
+const json = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
 // The FastAPI backend in api/main.py
 export function createHttpApi(baseUrl: string): ResearchApi {
   const base = baseUrl.replace(/\/$/, "");
@@ -141,12 +179,18 @@ export function createHttpApi(baseUrl: string): ResearchApi {
     chunks: (docId) => call(`/documents/${docId}/chunks`),
     map: (docId) => call(`/documents/${docId}/map`),
     suggestions: async () => GENERIC_QUESTIONS,
-    ask: (docId, question, mode) =>
-      call(`/documents/${docId}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, mode }),
-      }),
+    updateCitation: (docId, citation) => call(`/documents/${docId}/citation`, json("PUT", citation)),
+    lookupCitation: (docId, query) => call(`/documents/${docId}/citation/lookup`, json("POST", query)),
+    search: (query, docIds) => {
+      const params = new URLSearchParams({ q: query, limit: "15" });
+      if (docIds?.length) params.set("docs", docIds.join(","));
+      return call(`/search?${params}`);
+    },
+    notes: () => call("/notebook"),
+    addNote: (note) => call("/notebook", json("POST", note)),
+    updateNote: (id, patch) => call(`/notebook/${id}`, json("PATCH", patch)),
+    deleteNote: (id) => call(`/notebook/${id}`, { method: "DELETE" }),
+    ask: (docId, question, mode) => call(`/documents/${docId}/ask`, json("POST", { question, mode })),
   };
 }
 

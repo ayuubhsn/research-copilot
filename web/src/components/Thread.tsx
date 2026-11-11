@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { answerWithReferences, copyRich, STYLES, type Style } from "@/lib/cite";
 import { collapse, splitCitations } from "@/lib/text";
-import type { Claim, DocumentInfo, SourceHit } from "@/lib/types";
+import type { Citation, Claim, ClaimStatus, DocumentInfo, SourceHit } from "@/lib/types";
 import ScoutSteps from "./ScoutSteps";
 import type { Turn } from "./Workspace";
 
@@ -16,9 +17,13 @@ type Props = {
   onCite: (page: number) => void;
   onSource: (hit: SourceHit) => void;
   onClaim: (claim: Claim) => void;
+  onSaveSource?: (hit: SourceHit) => void;
+  style: Style;
+  setStyle: (s: Style) => void;
 };
 
-export default function Thread({ turns, activeId, doc, suggestions, onAsk, onFocus, onCite, onSource, onClaim }: Props) {
+export default function Thread(props: Props) {
+  const { turns, activeId, doc, suggestions, onAsk, onFocus, onCite, onSource, onClaim, onSaveSource, style, setStyle } = props;
   const bottom = useRef<HTMLDivElement>(null);
   const last = turns[turns.length - 1];
 
@@ -41,6 +46,10 @@ export default function Thread({ turns, activeId, doc, suggestions, onAsk, onFoc
             onCite={onCite}
             onSource={onSource}
             onClaim={onClaim}
+            onSaveSource={onSaveSource}
+            citation={doc.citation}
+            style={style}
+            setStyle={setStyle}
           />
         ))}
         <div ref={bottom} />
@@ -87,9 +96,13 @@ type TurnProps = {
   onCite: (page: number) => void;
   onSource: (hit: SourceHit) => void;
   onClaim: (claim: Claim) => void;
+  onSaveSource?: (hit: SourceHit) => void;
+  citation?: Citation;
+  style: Style;
+  setStyle: (s: Style) => void;
 };
 
-function TurnView({ turn, active, onFocus, onCite, onSource, onClaim }: TurnProps) {
+function TurnView({ turn, active, onFocus, onCite, onSource, onClaim, onSaveSource, citation, style, setStyle }: TurnProps) {
   const result = turn.result;
   const done = turn.status === "done" && result;
 
@@ -135,12 +148,48 @@ function TurnView({ turn, active, onFocus, onCite, onSource, onClaim }: TurnProp
               </p>
             )}
             <Answer text={result.answer} onCite={onCite} />
+            {citation && splitCitations(result.answer).some((p) => p.kind === "cite") && (
+              <CopyAnswer answer={result.answer} citation={citation} style={style} setStyle={setStyle} />
+            )}
             <FactCheck claims={result.claims} removed={result.removed} gaveUp={result.gaveUp} onClaim={onClaim} />
-            <Sources sources={result.sources} onSource={onSource} />
+            <Sources sources={result.sources} onSource={onSource} onSave={onSaveSource} />
           </div>
         )}
       </div>
     </article>
+  );
+}
+
+// Copies the answer with its page tags turned into in-text citations, plus the reference
+function CopyAnswer({ answer, citation, style, setStyle }: { answer: string; citation: Citation; style: Style; setStyle: (s: Style) => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={async () => {
+          const { html, plain } = answerWithReferences(answer, citation, style);
+          await copyRich(html, plain);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        }}
+        className="rounded-lg border border-line px-2.5 py-1 text-soft transition hover:border-accent hover:text-accent"
+      >
+        {copied ? "Copied ✓" : "Copy answer with references"}
+      </button>
+      <select
+        value={style}
+        onChange={(e) => setStyle(e.target.value as Style)}
+        aria-label="Citation style"
+        className="rounded-lg border border-line bg-panel-2 px-2 py-1 text-soft outline-none"
+      >
+        {STYLES.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+      {citation.source === "pdf" && <span className="text-warn">Paper details guessed from the PDF; check them first.</span>}
+    </div>
   );
 }
 
@@ -187,65 +236,105 @@ export function Answer({ text, onCite }: { text: string; onCite: (page: number) 
 
 type FactCheckProps = { claims: Claim[]; removed: number; gaveUp: boolean; onClaim: (claim: Claim) => void };
 
-function FactCheck({ claims, removed, gaveUp, onClaim }: FactCheckProps) {
+const statusOf = (c: Claim): ClaimStatus => c.status ?? (c.supported ? "supported" : "unsupported");
+
+const STATUS: Record<ClaimStatus, { icon: string; label: string; badge: string; text: string }> = {
+  supported: { icon: "✓", label: "Supported", badge: "bg-mint text-ink", text: "text-soft" },
+  partial: { icon: "◐", label: "Partly supported", badge: "bg-warn text-ink", text: "text-soft" },
+  unsupported: { icon: "✗", label: "Removed", badge: "bg-bad text-ink", text: "text-bad line-through" },
+};
+
+// Every claim with its status. Removed claims are shown with the reason, never dropped silently.
+function FactCheck({ claims, gaveUp, onClaim }: FactCheckProps) {
   const [open, setOpen] = useState(false);
   if (gaveUp || claims.length === 0) return null;
-  const ok = removed === 0;
+  const count = (status: ClaimStatus) => claims.filter((c) => statusOf(c) === status).length;
+  const removedClaims = claims.filter((c) => statusOf(c) === "unsupported");
+  const partial = count("partial");
+  const summary = [
+    `${count("supported")} supported`,
+    partial ? `${partial} partly supported` : "",
+    removedClaims.length ? `${removedClaims.length} removed` : "",
+  ].filter(Boolean);
+  const icon = removedClaims.length ? STATUS.unsupported : partial ? STATUS.partial : STATUS.supported;
 
   return (
-    <div className="mt-4 rounded-xl border border-line-soft bg-panel-2">
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(!open);
-        }}
-        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm"
-      >
-        <span className="flex items-center gap-2">
-          <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${ok ? "bg-mint text-ink" : "bg-warn text-ink"}`}>
-            {ok ? "✓" : "!"}
-          </span>
-          <span className="text-soft">
-            Fact-checked: {claims.length} {claims.length === 1 ? "claim" : "claims"},{" "}
-            {ok ? "all supported by the sources" : `${removed} removed as unsupported`}
-          </span>
-        </span>
-        <span className="text-xs text-dim">{open ? "Hide" : "Show"}</span>
-      </button>
-      {open && (
-        <ul className="flex flex-col gap-2.5 border-t border-line-soft px-3.5 py-3">
-          {claims.map((c, i) => (
-            <li key={i} className="text-sm">
-              <div className="flex gap-2">
-                <span className={c.supported ? "text-mint" : "text-bad"}>{c.supported ? "✓" : "✗"}</span>
-                <span className={c.supported ? "text-soft" : "text-bad line-through"}>{c.claim}</span>
-              </div>
-              {c.evidence && (
-                <div className="mt-1 ml-5 flex items-start gap-2">
-                  {c.page && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onClaim(c);
-                      }}
-                      title="Show this quote in the PDF"
-                      className="mt-0.5 shrink-0 rounded bg-raised px-1.5 py-px font-mono text-[11px] text-muted transition hover:bg-accent hover:text-ink"
-                    >
-                      p.{c.page}
-                    </button>
-                  )}
-                  <span className="font-serif text-[15px] text-muted italic">“{c.evidence}”</span>
-                </div>
-              )}
-            </li>
+    <>
+      {removedClaims.length > 0 && (
+        <div className="mt-4 rounded-xl border border-bad/30 bg-bad/5 px-3.5 py-2.5 text-sm">
+          <div className="mb-1 text-xs font-semibold tracking-wide text-bad uppercase">
+            Removed from the answer · not backed by the sources
+          </div>
+          {removedClaims.map((c, i) => (
+            <div key={i} className="mt-1.5">
+              <span className="text-muted line-through">{c.claim}</span>
+              {c.reason && <div className="text-xs text-soft">Why: {c.reason}</div>}
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </div>
+      <div className="mt-3 rounded-xl border border-line-soft bg-panel-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(!open);
+          }}
+          className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm"
+        >
+          <span className="flex items-center gap-2">
+            <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${icon.badge}`}>{icon.icon}</span>
+            <span className="text-soft">
+              Fact-checked {claims.length} {claims.length === 1 ? "claim" : "claims"}: {summary.join(" · ")}
+            </span>
+          </span>
+          <span className="text-xs text-dim">{open ? "Hide" : "Show"}</span>
+        </button>
+        {open && (
+          <ul className="flex flex-col gap-3 border-t border-line-soft px-3.5 py-3">
+            {claims.map((c, i) => {
+              const st = STATUS[statusOf(c)];
+              return (
+                <li key={i} className="text-sm">
+                  <div className="flex items-start gap-2">
+                    <span
+                      title={st.label}
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${st.badge}`}
+                    >
+                      {st.icon}
+                    </span>
+                    <span className={st.text}>{c.claim}</span>
+                  </div>
+                  {c.reason && statusOf(c) !== "supported" && <div className="mt-1 ml-6 text-xs text-warn">{c.reason}</div>}
+                  {c.evidence && (
+                    <div className="mt-1 ml-6 flex items-start gap-2">
+                      {c.page && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onClaim(c);
+                          }}
+                          title="Show this quote in the PDF"
+                          className="mt-0.5 shrink-0 rounded bg-raised px-1.5 py-px font-mono text-[11px] text-muted transition hover:bg-accent hover:text-ink"
+                        >
+                          p.{c.page}
+                        </button>
+                      )}
+                      <span className="font-serif text-[15px] text-muted italic">“{c.evidence}”</span>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }
 
-function Sources({ sources, onSource }: { sources: SourceHit[]; onSource: (hit: SourceHit) => void }) {
+type SourcesProps = { sources: SourceHit[]; onSource: (hit: SourceHit) => void; onSave?: (hit: SourceHit) => void };
+
+function Sources({ sources, onSource, onSave }: SourcesProps) {
   const [open, setOpen] = useState(false);
   const shown = open ? sources : sources.slice(0, 3);
 
@@ -254,20 +343,34 @@ function Sources({ sources, onSource }: { sources: SourceHit[]; onSource: (hit: 
       <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Passages it read</h3>
       <div className="flex flex-col gap-1.5">
         {shown.map((s) => (
-          <button
-            key={s.chunk}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSource(s);
-            }}
-            className="group flex items-start gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-raised"
-          >
-            <span className="mt-0.5 shrink-0 rounded bg-raised px-1.5 py-px font-mono text-xs text-soft group-hover:bg-accent group-hover:text-ink">
-              p.{s.page}
-            </span>
-            <span className="line-clamp-2 min-w-0 flex-1 text-sm text-muted">{collapse(s.text)}</span>
-            <ScoreBar score={s.score} />
-          </button>
+          <div key={s.chunk} className="group flex items-start gap-1 rounded-lg transition hover:bg-raised">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSource(s);
+              }}
+              className="flex min-w-0 flex-1 items-start gap-3 px-2 py-1.5 text-left"
+            >
+              <span className="mt-0.5 shrink-0 rounded bg-raised px-1.5 py-px font-mono text-xs text-soft group-hover:bg-accent group-hover:text-ink">
+                p.{s.page}
+              </span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-sm text-muted">{collapse(s.text)}</span>
+              <ScoreBar score={s.score} />
+            </button>
+            {onSave && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSave(s);
+                }}
+                title="Save this passage to your notebook"
+                aria-label="Save this passage to your notebook"
+                className="mt-1 mr-1 rounded-md px-1.5 py-0.5 text-sm text-dim opacity-0 transition group-hover:opacity-100 hover:text-accent focus:opacity-100"
+              >
+                ☆
+              </button>
+            )}
+          </div>
         ))}
       </div>
       {sources.length > 3 && (

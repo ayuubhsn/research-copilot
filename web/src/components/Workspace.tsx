@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createApi, DemoUnsupportedQuestion, type ResearchApi } from "@/lib/api";
-import type { AskResult, Chunk, Claim, DocumentInfo, KnowledgeMap, Mode, Page, Rect, SourceHit } from "@/lib/types";
+import type { Style } from "@/lib/cite";
+import type { AskResult, Chunk, Citation, Claim, DocumentInfo, KnowledgeMap, Mode, Note, Page, Rect, SearchHit, SourceHit } from "@/lib/types";
 import AskBar from "./AskBar";
+import CitationEditor from "./CitationEditor";
 import FilePicker from "./FilePicker";
+import FindAgain from "./FindAgain";
+import Notebook from "./Notebook";
 import Sidebar from "./Sidebar";
 import Thread from "./Thread";
 import TopBar from "./TopBar";
@@ -29,6 +33,21 @@ export type DocData = { pages: Page[]; chunks: Chunk[]; map: KnowledgeMap; sugge
 
 export type Upload = { name: string; error?: string };
 
+export type View = "ask" | "find" | "notebook";
+
+// One colour per paper, used in Find again and the notebook
+const PAPER_COLORS = ["#F2D04B", "#8CA3FF", "#7CC4A4", "#E9A86B", "#C99BE0", "#6FC3D9", "#E58A9A", "#9AB87A"];
+
+function savedStyle(): Style {
+  try {
+    const s = localStorage.getItem("citation-style");
+    if (s === "apa" || s === "harvard" || s === "mla" || s === "chicago" || s === "ieee") return s;
+  } catch {
+    // storage can be unavailable (private windows); the default is fine
+  }
+  return "apa";
+}
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function Workspace() {
@@ -43,15 +62,33 @@ export default function Workspace() {
   const [mode, setMode] = useState<Mode>("fast");
   const [tab, setTab] = useState<ViewerTab>("page");
   const [focus, setFocus] = useState<Focus>({ page: 1, chunk: null, rects: null });
+  const [view, setView] = useState<View>("ask");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [style, setStyleState] = useState<Style>("apa");
+  const [editing, setEditing] = useState<string | null>(null); // doc whose citation is being edited
+  const [notice, setNotice] = useState<string | null>(null);
   const nextId = useRef(1);
+  // Where to go once another document has loaded (from Find again or the notebook)
+  const pendingFocus = useRef<Focus | null>(null);
+
+  const setStyle = (s: Style) => {
+    setStyleState(s);
+    try {
+      localStorage.setItem("citation-style", s);
+    } catch {
+      // not remembered, which is fine
+    }
+  };
 
   useEffect(() => {
     (async () => {
       try {
         const created = await createApi();
-        const list = await created.documents();
+        const [list, saved] = await Promise.all([created.documents(), created.notes()]);
         setApi(created);
         setDocs(list);
+        setNotes(saved);
+        setStyleState(savedStyle());
         setDocId(list[0]?.id ?? null);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : String(error));
@@ -73,7 +110,8 @@ export default function Workspace() {
         ]);
         if (!cancelled) {
           setData({ pages, chunks, map, suggestions });
-          setFocus({ page: 1, chunk: null, rects: null });
+          setFocus(pendingFocus.current ?? { page: 1, chunk: null, rects: null });
+          pendingFocus.current = null;
         }
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
@@ -110,6 +148,51 @@ export default function Workspace() {
     setActiveId(null);
   };
 
+  // Opens a page of any paper, switching paper first if needed
+  const openAt = (id: string, target: Focus) => {
+    setTab("page");
+    if (id === docId) {
+      setFocus(target);
+    } else {
+      pendingFocus.current = target;
+      selectDoc(id);
+    }
+  };
+
+  const flash = (message: string) => {
+    setNotice(message);
+    setTimeout(() => setNotice((n) => (n === message ? null : n)), 2400);
+  };
+
+  const saveNote = async (id: string, page: number, text: string) => {
+    if (!api) return;
+    try {
+      const note = await api.addNote({ docId: id, page, text });
+      setNotes((all) => [...all, note]);
+      flash("★ Saved to your notebook");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const updateNote = async (id: string, patch: { note?: string; tags?: string[] }) => {
+    if (!api) return;
+    const updated = await api.updateNote(id, patch);
+    setNotes((all) => all.map((n) => (n.id === id ? updated : n)));
+  };
+
+  const deleteNote = async (id: string) => {
+    if (!api) return;
+    await api.deleteNote(id);
+    setNotes((all) => all.filter((n) => n.id !== id));
+  };
+
+  const saveCitation = async (id: string, citation: Citation) => {
+    if (!api) return;
+    const updated = await api.updateCitation(id, citation);
+    setDocs((all) => all.map((d) => (d.id === id ? updated : d)));
+  };
+
   const uploadFile = async (file: File) => {
     if (!api) return;
     setUpload({ name: file.name });
@@ -129,6 +212,7 @@ export default function Workspace() {
     const rest = docs.filter((d) => d.id !== id);
     setDocs(rest);
     setTurns((all) => all.filter((t) => t.docId !== id));
+    setNotes((all) => all.filter((n) => n.docId !== id));
     if (id === docId) {
       setData(null);
       setDocId(rest[0]?.id ?? null);
@@ -203,6 +287,8 @@ export default function Workspace() {
   if (!api) return <Loading text="Connecting…" />;
 
   const doc = docs.find((d) => d.id === docId) ?? null;
+  const colors = Object.fromEntries(docs.map((d, i) => [d.id, PAPER_COLORS[i % PAPER_COLORS.length]]));
+  const editingDoc = docs.find((d) => d.id === editing) ?? null;
   const docTurns = turns.filter((t) => t.docId === docId);
   const activeTurn = docTurns.find((t) => t.id === activeId) ?? null;
   const busy = turns.some((t) => t.status === "running");
@@ -223,12 +309,36 @@ export default function Workspace() {
           onRemove={removeDoc}
           onDismissUpload={() => setUpload(null)}
           onSelect={(turn) => {
+            setView("ask");
             setActiveId(turn.id);
             if (turn.result?.sources[0]) showSource(turn.result.sources[0]);
           }}
+          onEditCitation={setEditing}
         />
         <main className="flex min-h-[60vh] min-w-0 flex-1 flex-col border-line lg:min-h-0 lg:border-r">
-          {doc && data ? (
+          {doc && <ViewTabs view={view} setView={setView} notes={notes.length} live={api.live} />}
+          {doc && view === "find" ? (
+            <FindAgain
+              docs={docs}
+              colors={colors}
+              notes={notes}
+              search={(q, ids) => api.search(q, ids)}
+              onOpen={(hit: SearchHit) => openAt(hit.docId, { page: hit.page, chunk: hit.docId === docId ? hit.chunk : null, rects: hit.rects })}
+              onSave={(hit: SearchHit) => saveNote(hit.docId, hit.page, hit.text)}
+            />
+          ) : doc && view === "notebook" ? (
+            <Notebook
+              notes={notes}
+              docs={docs}
+              colors={colors}
+              style={style}
+              setStyle={setStyle}
+              onOpen={(n) => openAt(n.docId, { page: n.page, chunk: null, rects: n.rects })}
+              onUpdate={updateNote}
+              onDelete={deleteNote}
+              onEditCitation={setEditing}
+            />
+          ) : doc && data ? (
             <>
               <Thread
                 turns={docTurns}
@@ -240,6 +350,9 @@ export default function Workspace() {
                 onCite={showPage}
                 onSource={showSource}
                 onClaim={showClaim}
+                onSaveSource={api.live ? (hit) => saveNote(doc.id, hit.page, hit.text) : undefined}
+                style={style}
+                setStyle={setStyle}
               />
               <AskBar mode={mode} setMode={setMode} onAsk={ask} busy={busy} suggestions={data.suggestions} />
             </>
@@ -258,12 +371,50 @@ export default function Workspace() {
             data={data}
             focus={focus}
             setPage={showPage}
-            turn={activeTurn}
+            turn={view === "ask" ? activeTurn : null}
             onSource={showSource}
+            notes={notes.filter((n) => n.docId === doc.id)}
+            onSaveSelection={api.live ? (page, text) => saveNote(doc.id, page, text) : undefined}
           />
         )}
       </div>
+      {editingDoc && (
+        <CitationEditor
+          doc={editingDoc}
+          onSave={(c) => saveCitation(editingDoc.id, c)}
+          onLookup={(query) => api.lookupCitation(editingDoc.id, query)}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {notice && (
+        <div className="fixed right-5 bottom-5 z-40 rounded-xl border border-line bg-raised px-4 py-2.5 text-sm shadow-2xl shadow-black/50 animate-rise">{notice}</div>
+      )}
     </div>
+  );
+}
+
+function ViewTabs({ view, setView, notes, live }: { view: View; setView: (v: View) => void; notes: number; live: boolean }) {
+  const tabs: { id: View; label: string }[] = [
+    { id: "ask", label: "Ask" },
+    { id: "find", label: "Find again" },
+    { id: "notebook", label: notes ? `Notebook · ${notes}` : "Notebook" },
+  ];
+  return (
+    <nav className="flex items-center gap-1 border-b border-line px-4 py-2">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => setView(t.id)}
+          disabled={!live && t.id !== "ask"}
+          title={!live && t.id !== "ask" ? "Needs the backend" : undefined}
+          className={`rounded-lg px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            view === t.id ? "bg-raised font-medium text-text" : "text-muted hover:text-soft"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 

@@ -5,6 +5,12 @@ Riktige svar får én feil plantet med vilje, og så måler vi hvor mange av
 feilene faktasjekken fanger. Vi sjekker også de riktige svarene, for å se
 om faktasjekken fjerner påstander den ikke burde fjerne.
 
+To varianter sammenlignes på de samme svarene:
+- binary:      bare støttet / ikke støttet
+- three-level: støttet / delvis støttet / ikke støttet
+En feil regnes som fanget hvis den merkes "ikke støttet" (fjernes) eller
+"delvis støttet" (vises med advarsel). Vi teller begge deler hver for seg.
+
 Tre typer feil:
 - number:   et tall, en dato eller en prosent er endret
 - entity:   et navn er byttet med et annet navn fra artikkelen
@@ -13,7 +19,7 @@ Tre typer feil:
 Kjør fra prosjektmappen:
     python eval/evaluate_fact_check.py
 
-De plantede feilene lagres i eval/planted_errors.json og gjenbrukes, så
+De plantede feilene lagres i eval/planted_<testsett>.json og gjenbrukes, så
 begge versjonene av faktasjekken testes på nøyaktig de samme svarene.
 """
 
@@ -34,7 +40,8 @@ from src.rag import create_embeddings, create_faiss_index, load_embedding_model,
 EVAL_DIR = ROOT / "eval"
 # Standard er det offentlige kontrollsettet; et annet testsett kan gis som argument
 QUESTIONS_FILE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else EVAL_DIR / "control_questions.csv"
-PLANTED_FILE = EVAL_DIR / "planted_errors.json"
+# Én fil per testsett, så plantede feil fra ett sett aldri brukes på et annet
+PLANTED_FILE = EVAL_DIR / f"planted_{QUESTIONS_FILE.stem}.json"
 MODEL = "gpt-4o-mini"
 ERROR_TYPES = ["number", "entity", "stitched"]
 
@@ -53,9 +60,11 @@ If the answer has nothing that fits the requested type, reply {"skip": true}.
 Otherwise reply with JSON only: {"answer": "<rewritten answer>", "false_claim": "<the false claim>"}"""
 
 CAUGHT_PROMPT = """A fact checker reviewed an answer that contained one planted false claim.
-Did the checker flag that false claim as not supported?
+Each claim it found has a status: supported, partial or unsupported.
+Which status did the checker give the claim that contains the planted error?
+Use "missing" if no claim covers it.
 
-Reply with JSON only: {"caught": true | false}"""
+Reply with JSON only: {"status": "supported" | "partial" | "unsupported" | "missing"}"""
 
 
 def ask_json(system_prompt, content, temperature=0):
@@ -114,17 +123,18 @@ def main():
     summary = {}
     for mode in PROMPTS:
         print(f"\nTester faktasjekk: {mode}")
-        caught = {t: 0 for t in ERROR_TYPES}
+        removed = {t: 0 for t in ERROR_TYPES}
+        flagged = {t: 0 for t in ERROR_TYPES}
         total = {t: 0 for t in ERROR_TYPES}
-        false_alarms = 0
-        clean_claims = 0
+        false_removed = false_flagged = clean_claims = 0
 
         for case in cases:
             results = search_chunks(case["question"], model, index, chunks, top_k=5)
 
-            # Riktig svar: alt som fjernes her, er en falsk alarm
+            # Riktig svar: alt som fjernes eller flagges her, er en falsk alarm
             clean = check_answer(case["question"], case["clean"], results, mode=mode)
-            false_alarms += clean["removed"]
+            false_removed += clean["removed"]
+            false_flagged += clean.get("partial", 0)
             clean_claims += len(clean["claims"])
 
             for error_type, planted in case["planted"].items():
@@ -134,30 +144,31 @@ def main():
                     f"Planted false claim: {planted['false_claim']}\n\n"
                     f"Checker output:\n{json.dumps(checked['claims'], ensure_ascii=False)}",
                 )
+                status = verdict.get("status")
                 total[error_type] += 1
-                caught[error_type] += bool(verdict.get("caught"))
+                removed[error_type] += status == "unsupported"
+                flagged[error_type] += status == "partial"
 
-        summary[mode] = (caught, total, false_alarms, clean_claims)
+        summary[mode] = (removed, flagged, total, false_removed, false_flagged, clean_claims)
 
-    print("\n" + "=" * 70)
-    print(f"{'Type feil':<12}" + "".join(f"{mode:>18}" for mode in PROMPTS))
-    for error_type in ERROR_TYPES:
+    print("\n" + "=" * 78)
+    print("Fanget = fjernet (ikke støttet) + flagget (delvis støttet)\n")
+    print(f"{'Type feil':<14}" + "".join(f"{mode:>32}" for mode in PROMPTS))
+    for error_type in ERROR_TYPES + ["TOTALT"]:
         cells = []
         for mode in PROMPTS:
-            caught, total, *_ = summary[mode]
-            cells.append(f"{caught[error_type]:>10}/{total[error_type]:<3} fanget")
-        print(f"{error_type:<12}" + "".join(f"{c:>18}" for c in cells))
+            removed, flagged, total, *_ = summary[mode]
+            r = sum(removed.values()) if error_type == "TOTALT" else removed[error_type]
+            f = sum(flagged.values()) if error_type == "TOTALT" else flagged[error_type]
+            n = sum(total.values()) if error_type == "TOTALT" else total[error_type]
+            cells.append(f"{r + f:>3}/{n:<3} fanget ({r} fjernet, {f} flagget)")
+        print(f"{error_type:<14}" + "".join(f"{c:>32}" for c in cells))
     cells = []
     for mode in PROMPTS:
-        caught, total, *_ = summary[mode]
-        cells.append(f"{sum(caught.values()):>10}/{sum(total.values()):<3} fanget")
-    print(f"{'TOTALT':<12}" + "".join(f"{c:>18}" for c in cells))
-    cells = []
-    for mode in PROMPTS:
-        _, _, false_alarms, clean_claims = summary[mode]
-        cells.append(f"{false_alarms:>10}/{clean_claims:<3} fjernet")
-    print(f"{'Falske alarmer':<12}" + "".join(f"{c:>18}" for c in cells))
-    print("\nFalske alarmer = riktige påstander i riktige svar som faktasjekken likevel fjernet.")
+        *_, false_removed, false_flagged, clean_claims = summary[mode]
+        cells.append(f"{false_removed}/{clean_claims} fjernet, {false_flagged} flagget")
+    print(f"{'Falske alarmer':<14}" + "".join(f"{c:>32}" for c in cells))
+    print("\nFalske alarmer = riktige påstander i riktige svar som faktasjekken likevel fjernet eller flagget.")
 
 
 if __name__ == "__main__":
