@@ -21,3 +21,4 @@ eval/questions.csv
 
 eval/answer_results.csv
 api/data/
+eval/planted_*.json

@@ -17,7 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from api.locate import locate
+from api.locate import locate, locate_words
+from api import metadata
+from api.notebook import Notebook
 from api.store import Store, UploadError
 from src.fact_check import check_answer
 from src.knowledge_map import place_question
@@ -37,6 +39,7 @@ state = {}
 async def lifespan(app):
     # Embedding-modellen lastes én gang og deles av alle forespørsler
     state["store"] = Store(DATA_DIR, load_embedding_model())
+    state["notebook"] = Notebook(DATA_DIR)
     yield
     state.clear()
 
@@ -49,6 +52,10 @@ def store() -> Store:
     return state["store"]
 
 
+def notebook() -> Notebook:
+    return state["notebook"]
+
+
 def get_doc(doc_id):
     doc = store().get(doc_id)
     if doc is None:
@@ -59,6 +66,38 @@ def get_doc(doc_id):
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     mode: Literal["fast", "scout"] = "fast"
+
+
+class Author(BaseModel):
+    family: str
+    given: str = ""
+
+
+class Citation(BaseModel):
+    title: str
+    authors: list[Author] = []
+    year: int | None = None
+    container: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    doi: str | None = None
+    type: Literal["article", "preprint", "conference", "book", "chapter", "report"] = "article"
+    publisher: str = ""
+    source: str = "user"
+
+
+class NoteRequest(BaseModel):
+    docId: str
+    page: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=5000)
+    note: str = ""
+    tags: list[str] = []
+
+
+class NoteUpdate(BaseModel):
+    note: str | None = None
+    tags: list[str] | None = None
 
 
 @app.get("/health")
@@ -85,6 +124,99 @@ def upload(file: UploadFile = File(...)):
 def delete(doc_id: str):
     if not store().delete(doc_id):
         raise HTTPException(404, "No document with that id.")
+    notebook().delete_document(doc_id)
+
+
+class LookupRequest(BaseModel):
+    doi: str | None = None
+    title: str | None = None
+
+
+@app.post("/documents/{doc_id}/citation/lookup")
+def lookup_citation(doc_id: str, request: LookupRequest):
+    """Henter kildeinfo fra en DOI, eller søker opp en tittel. Lagrer ingenting; brukeren ser over først."""
+    get_doc(doc_id)
+    doi = (request.doi or "").strip().removeprefix("https://doi.org/").removeprefix("doi:").strip() or None
+    if not doi and request.title:
+        doi = metadata.search_title(request.title)
+    found = metadata.citation_for_doi(doi) if doi else None
+    if found is None:
+        raise HTTPException(404, "Found nothing for that DOI or title, or the register could not be reached.")
+    return found
+
+
+@app.put("/documents/{doc_id}/citation")
+def update_citation(doc_id: str, citation: Citation):
+    """Brukeren retter opp kildeinfo (forfattere, år, tittel ...) for referansene."""
+    get_doc(doc_id)
+    return store().set_citation(doc_id, {**citation.model_dump(), "source": "user"}).info()
+
+
+@app.get("/search")
+def search(q: str, limit: int = 12, docs: str | None = None):
+    """Finn igjen: hybridsøk i hele biblioteket, uten språkmodell. Raskt og gratis."""
+    query = q.strip()
+    if not query:
+        return []
+    wanted = set(docs.split(",")) if docs else None
+    hits = []
+    for doc in store().all():
+        if wanted and doc.id not in wanted:
+            continue
+        for r in search_chunks(query, store().model, doc.index, doc.chunks, top_k=limit):
+            # Eksakte ord teller litt ekstra: det er ofte det man husker
+            rank = r["score"] + (0.15 if r["phrase_match"] else 0) + min(r["keyword_score"], 10) * 0.01
+            hits.append((rank, doc, r))
+    hits.sort(key=lambda h: h[0], reverse=True)
+
+    results = []
+    pdfs = {}
+    for rank, doc, r in hits[:limit]:
+        pdf = pdfs.setdefault(doc.id, pymupdf.open(doc.pdf_path))
+        results.append(
+            {
+                "docId": doc.id,
+                "chunk": r["chunk"],
+                "page": r["page_number"],
+                "score": round(r["score"], 3),
+                "rank": round(rank, 3),
+                "text": r["text"],
+                "rects": locate(pdf[r["page_number"] - 1], r["text"]),
+            }
+        )
+    for pdf in pdfs.values():
+        pdf.close()
+    return results
+
+
+@app.get("/notebook")
+def list_notes():
+    return notebook().all()
+
+
+@app.post("/notebook", status_code=201)
+def add_note(request: NoteRequest):
+    doc = get_doc(request.docId)
+    if request.page > doc.page_count:
+        raise HTTPException(400, "That page does not exist in the document.")
+    with pymupdf.open(doc.pdf_path) as pdf:
+        # Lagre hele ord, også når markeringen startet eller sluttet midt i et ord
+        rects, text = locate_words(pdf[request.page - 1], request.text)
+    return notebook().add(request.docId, request.page, text, rects, request.note, request.tags)
+
+
+@app.patch("/notebook/{note_id}")
+def update_note(note_id: str, request: NoteUpdate):
+    entry = notebook().update(note_id, request.note, request.tags)
+    if entry is None:
+        raise HTTPException(404, "No note with that id.")
+    return entry
+
+
+@app.delete("/notebook/{note_id}", status_code=204)
+def delete_note(note_id: str):
+    if not notebook().delete(note_id):
+        raise HTTPException(404, "No note with that id.")
 
 
 @app.get("/documents/{doc_id}/file")
@@ -115,15 +247,15 @@ def ask(doc_id: str, request: AskRequest):
 
     if request.mode == "fast":
         results = search_chunks(question, store().model, doc.index, doc.chunks, top_k=TOP_K)
-        checked = check_answer(question, generate_answer(question, results), results, mode="basic")
-        answer, claims, removed = checked["answer"], checked["claims"], checked["removed"]
+        checked = check_answer(question, generate_answer(question, results), results)
+        answer, claims, removed, partial = checked["answer"], checked["claims"], checked["removed"], checked["partial"]
         gave_up, searches, trace = False, 1, []
     else:
         scout = run_scout(question, store().model, doc.index, doc.chunks, top_k=TOP_K, check=True)
         results = sorted(scout["passages"], key=lambda r: r["score"], reverse=True)
         check = next((s for s in scout["trace"] if s["type"] == "check"), None)
         answer, gave_up, searches, trace = scout["answer"], scout["gave_up"], scout["searches"], scout["trace"]
-        claims, removed = (check["claims"], check["removed"]) if check else ([], 0)
+        claims, removed, partial = (check["claims"], check["removed"], check.get("partial", 0)) if check else ([], 0, 0)
 
     with pymupdf.open(doc.pdf_path) as pdf:
         sources = [
@@ -150,6 +282,7 @@ def ask(doc_id: str, request: AskRequest):
         "answer": answer,
         "claims": claims,
         "removed": removed,
+        "partial": partial,
         "gaveUp": gave_up,
         "searches": searches,
         "sources": sources,

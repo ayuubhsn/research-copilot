@@ -1,3 +1,4 @@
+import { shortLabel } from "@/lib/cite";
 import type { DocumentInfo } from "@/lib/types";
 import FilePicker from "./FilePicker";
 import type { Turn, Upload } from "./Workspace";
@@ -14,6 +15,7 @@ type Props = {
   onRemove: (id: string) => void;
   onDismissUpload: () => void;
   onSelect: (turn: Turn) => void;
+  onEditCitation: (docId: string) => void;
 };
 
 export default function Sidebar(props: Props) {
@@ -35,13 +37,24 @@ export default function Sidebar(props: Props) {
                 <div className="flex items-start gap-2.5">
                   <PdfIcon />
                   <div className="min-w-0">
-                    <div className="truncate pr-5 font-mono text-[13px]">{doc.file}</div>
+                    <div className="truncate pr-12 font-mono text-[13px]">{doc.file}</div>
+                    <div className="mt-0.5 truncate text-xs text-soft">{doc.citation ? shortLabel(doc.citation, doc.file) : ""}</div>
                     <div className="mt-0.5 text-xs text-muted">
                       {doc.pageCount} pages · {doc.passages} passages
                     </div>
                   </div>
                 </div>
               </button>
+              {live && (
+                <button
+                  onClick={() => props.onEditCitation(doc.id)}
+                  title="Edit paper details for references"
+                  aria-label={`Edit details for ${doc.file}`}
+                  className="absolute top-2.5 right-9 hidden h-6 w-6 items-center justify-center rounded-md text-xs text-dim group-hover:flex hover:bg-panel hover:text-accent"
+                >
+                  ✎
+                </button>
+              )}
               {live && (
                 <button
                   onClick={() => props.onRemove(doc.id)}

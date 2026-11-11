@@ -60,12 +60,29 @@ def find_span(stream, target, probe=40):
 
 def locate(page, text):
     """Rektangler (andeler 0–1) for teksten på siden, ett per linje. Tom liste hvis ikke funnet."""
+    return locate_words(page, text)[0]
+
+
+def locate_words(page, text):
+    """Som locate(), men gir også teksten utvidet til hele ord.
+
+    En markering med musen starter og slutter ofte midt i et ord ("he first
+    option ... that wo"). Ordene på siden som treffet berører, gir den hele
+    setningen ("The first option ... that would").
+    """
     stream, owner, words = page_stream(page)
     span = find_span(stream, squash(text))
     if span is None:
-        return []
+        return [], text
 
     first, last = owner[span[0]], owner[span[1]]
+    # Ord delt med bindestrek over et linjeskift limes sammen; "best- and" midt på en linje ikke
+    hit = words[first : last + 1]
+    whole = ""
+    for i, w in enumerate(hit):
+        line_break_hyphen = w[4].endswith("-") and i + 1 < len(hit) and (hit[i + 1][5], hit[i + 1][6]) != (w[5], w[6])
+        whole += w[4][:-1] if line_break_hyphen else w[4] + " "
+    whole = whole.strip()
     width, height = page.rect.width, page.rect.height
     lines = {}
     for w in words[first : last + 1]:
@@ -73,7 +90,7 @@ def locate(page, text):
         x0, y0, x1, y1 = lines.get(key, (w[0], w[1], w[2], w[3]))
         lines[key] = (min(x0, w[0]), min(y0, w[1]), max(x1, w[2]), max(y1, w[3]))
 
-    return [
+    rects = [
         {
             "x": round(x0 / width, 4),
             "y": round(y0 / height, 4),
@@ -82,3 +99,4 @@ def locate(page, text):
         }
         for x0, y0, x1, y1 in lines.values()
     ]
+    return rects, whole

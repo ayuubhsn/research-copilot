@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { highlightPage } from "@/lib/text";
-import type { DocumentInfo, SourceHit } from "@/lib/types";
+import type { DocumentInfo, Note, SourceHit } from "@/lib/types";
 import PdfPage, { type Highlight } from "./PdfPage";
 import type { DocData, Focus, Turn } from "./Workspace";
 
@@ -18,6 +18,8 @@ type Props = {
   setPage: (p: number) => void;
   turn: Turn | null;
   onSource: (hit: SourceHit) => void;
+  notes: Note[]; // saved quotes in this document, shown in green
+  onSaveSelection?: (page: number, text: string) => Promise<void>;
 };
 
 export default function Viewer(props: Props) {
@@ -48,7 +50,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function PageView({ doc, fileUrl, data, focus, setPage, turn }: Props) {
+function PageView({ doc, fileUrl, data, focus, setPage, turn, notes, onSaveSelection }: Props) {
   const sources = useMemo(() => (turn?.status === "done" ? (turn.result?.sources ?? []) : []), [turn]);
   const sourcePages = [...new Set(sources.map((s) => s.page))].sort((a, b) => a - b);
   const page = Math.min(Math.max(focus.page, 1), doc.pageCount);
@@ -85,7 +87,19 @@ function PageView({ doc, fileUrl, data, focus, setPage, turn }: Props) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {fileUrl ? (
-          <PdfPage url={fileUrl} page={page} highlights={pdfHighlights(sources, page, focus)} />
+          <>
+            <PdfPage
+              url={fileUrl}
+              page={page}
+              highlights={pdfHighlights(sources, notes, page, focus)}
+              onSaveSelection={onSaveSelection ? (text) => onSaveSelection(page, text) : undefined}
+            />
+            {onSaveSelection && (
+              <p className="mt-2 text-center text-xs text-dim">
+                Select text on the page to save it to your notebook. <span className="text-mint">Green</span> marks what you saved.
+              </p>
+            )}
+          </>
         ) : (
           <TextPage data={data} page={page} focus={focus} sources={sources} hasResult={!!turn?.result} />
         )}
@@ -94,15 +108,16 @@ function PageView({ doc, fileUrl, data, focus, setPage, turn }: Props) {
   );
 }
 
-// Every passage used on this page is marked lightly; the one in focus strongly
-function pdfHighlights(sources: SourceHit[], page: number, focus: Focus): Highlight[] {
+// Saved quotes are green, passages the answer used light yellow, and the one in focus strong yellow
+function pdfHighlights(sources: SourceHit[], notes: Note[], page: number, focus: Focus): Highlight[] {
+  const highlights: Highlight[] = notes.filter((n) => n.page === page && n.rects.length).map((n) => ({ rects: n.rects, kind: "saved" }));
   const onPage = sources.filter((s) => s.page === page && s.rects?.length);
-  const highlights: Highlight[] = onPage.map((s) => ({ rects: s.rects!, strong: false }));
+  highlights.push(...onPage.map((s): Highlight => ({ rects: s.rects!, kind: "source" })));
   if (focus.page === page && focus.rects) {
-    highlights.push({ rects: focus.rects, strong: true });
+    highlights.push({ rects: focus.rects, kind: "focus" });
   } else if (onPage[0]) {
     const focused = onPage.find((s) => s.chunk === focus.chunk) ?? onPage[0];
-    highlights.push({ rects: focused.rects!, strong: true });
+    highlights.push({ rects: focused.rects!, kind: "focus" });
   }
   return highlights;
 }
