@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { BASE_PATH } from "@/lib/api";
 import type { Rect } from "@/lib/types";
 
 // source: a passage the answer used · focus: the one being looked at · saved: a quote in the notebook
@@ -23,7 +24,7 @@ const documents = new Map<string, Promise<PDFDocumentProxy>>();
 function loadPdfJs() {
   pdfjsModule ??= import("pdfjs-dist").then((pdfjs) => {
     // These files are copied to public/pdfjs by scripts/copy-pdf-worker.mjs on npm install
-    pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
+    pdfjs.GlobalWorkerOptions.workerSrc = `${BASE_PATH}/pdfjs/pdf.worker.min.mjs`;
     return pdfjs;
   });
   return pdfjsModule;
@@ -37,11 +38,11 @@ async function loadPdf(url: string) {
         (pdfjs) =>
           pdfjs.getDocument({
             url,
-            wasmUrl: "/pdfjs/wasm/", // decoders for scanned pages
-            standardFontDataUrl: "/pdfjs/standard_fonts/",
-            cMapUrl: "/pdfjs/cmaps/",
+            wasmUrl: `${BASE_PATH}/pdfjs/wasm/`, // decoders for scanned pages
+            standardFontDataUrl: `${BASE_PATH}/pdfjs/standard_fonts/`,
+            cMapUrl: `${BASE_PATH}/pdfjs/cmaps/`,
             cMapPacked: true,
-            iccUrl: "/pdfjs/iccs/",
+            iccUrl: `${BASE_PATH}/pdfjs/iccs/`,
           }).promise,
       ),
     );

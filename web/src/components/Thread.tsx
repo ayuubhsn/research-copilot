@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { answerWithReferences, copyRich, STYLES, type Style } from "@/lib/cite";
+import { answerWithReferences, copyRich, reference, STYLES, toPlain, type Style } from "@/lib/cite";
 import { collapse, splitCitations } from "@/lib/text";
 import type { Citation, Claim, ClaimStatus, DocumentInfo, SourceHit } from "@/lib/types";
 import ScoutSteps from "./ScoutSteps";
@@ -71,6 +71,11 @@ function EmptyState({ doc, suggestions, onAsk }: { doc: DocumentInfo; suggestion
           Answers come only from <span className="font-mono text-sm text-text">{doc.file}</span>, with the page behind
           every claim. Click a page tag to see the passage. If the answer isn&apos;t in the paper, it says so.
         </p>
+        {doc.license && doc.citation && (
+          <p className="mt-4 text-xs text-dim">
+            Demo paper: {toPlain(reference(doc.citation, "apa"))} Licensed {doc.license}.
+          </p>
+        )}
         <h2 className="mt-9 mb-3 text-xs font-semibold tracking-wide text-muted uppercase">Try one of these</h2>
         <div className="flex flex-col gap-2">
           {suggestions.map((q) => (

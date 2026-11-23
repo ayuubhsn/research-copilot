@@ -2,7 +2,8 @@
 // (eval/export_demo.py today, the FastAPI backend later).
 
 export type Page = { page: number; text: string };
-export type Chunk = { page: number; text: string };
+// rects: where the passage sits on its PDF page (only in the demo data)
+export type Chunk = { page: number; text: string; rects?: Rect[] };
 
 export type MapPoint = { x: number; y: number; island: number; page: number };
 export type Island = { id: number; x: number; y: number; label: string; size: number };
@@ -74,6 +75,7 @@ export type DocumentInfo = {
   pageCount: number;
   passages: number;
   citation?: Citation;
+  license?: string | null; // set for the demo paper, shown as attribution
 };
 
 // One hit from "Find again", the search across the whole library
@@ -115,7 +117,14 @@ export type AskResult = {
 
 // Raw file written by eval/export_demo.py
 export type DemoData = {
-  paper: { file: string; page_count: number; pages: Page[] };
+  paper: {
+    file: string;
+    page_count: number;
+    pages: Page[];
+    citation?: Citation;
+    license?: string | null; // e.g. "CC BY 4.0" when the paper may be published
+    pdf?: string; // file name of the PDF next to demo_data.json
+  };
   chunks: Chunk[];
   map: KnowledgeMap;
   runs: {
@@ -126,6 +135,7 @@ export type DemoData = {
       draft: string;
       claims: Claim[];
       removed: number;
+      partial?: number;
       sources: SourceHit[];
     };
     scout: { answer: string; searches: number; gave_up: boolean; trace: TraceStep[] };

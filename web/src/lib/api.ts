@@ -11,6 +11,10 @@ import type {
   SearchHit,
   SourceHit,
 } from "./types";
+import { createSearch } from "./demoSearch";
+
+// Where the app is served from, e.g. "/research-copilot/app" on GitHub Pages
+export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 // Everything the UI needs from a backend. The demo implementation below
 // replays pre-recorded runs; a FastAPI implementation can replace it later
@@ -46,7 +50,24 @@ export class DemoUnsupportedQuestion extends Error {}
 
 const normalize = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-export async function createDemoApi(url = "/demo/demo_data.json"): Promise<ResearchApi> {
+// The demo keeps saved quotes in this browser only
+const NOTES_KEY = "demo-notebook";
+function loadNotes(): Note[] {
+  try {
+    return JSON.parse(localStorage.getItem(NOTES_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function storeNotes(notes: Note[]) {
+  try {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  } catch {
+    // not remembered after a reload, which is fine for a demo
+  }
+}
+
+export async function createDemoApi(url = `${BASE_PATH}/demo/demo_data.json`): Promise<ResearchApi> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Could not load ${url} (${response.status})`);
   const data: DemoData = await response.json();
@@ -58,6 +79,14 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
     file: data.paper.file,
     pageCount: data.paper.page_count,
     passages: data.chunks.length,
+    citation: data.paper.citation,
+    license: data.paper.license,
+  };
+  const search = createSearch(data.chunks, doc.id);
+  let notes = loadNotes();
+  const saveNotes = (next: Note[]) => {
+    notes = next;
+    storeNotes(notes);
   };
 
   const findRun = (question: string) => data.runs.find((r) => normalize(r.question) === normalize(question));
@@ -69,14 +98,28 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
       throw new Error("Uploading needs the backend.");
     },
     remove: async () => {},
-    fileUrl: () => null,
-    updateCitation: needsBackend,
+    fileUrl: () => (data.paper.pdf ? `${url.slice(0, url.lastIndexOf("/") + 1)}${data.paper.pdf}` : null),
+    async updateCitation(_docId, citation) {
+      doc.citation = citation;
+      return { ...doc };
+    },
     lookupCitation: needsBackend,
-    search: needsBackend,
-    notes: async () => [],
-    addNote: needsBackend,
-    updateNote: needsBackend,
-    deleteNote: needsBackend,
+    search: async (query) => search(query),
+    notes: async () => notes,
+    async addNote({ docId, page, text, note = "", tags = [] }) {
+      // Without the backend the quote cannot be located on the page, unless it is a whole passage
+      const chunk = data.chunks.find((c) => c.page === page && c.text.replace(/\s+/g, " ").trim() === text.replace(/\s+/g, " ").trim());
+      const saved: Note = { id: Math.random().toString(36).slice(2, 14), docId, page, text, rects: chunk?.rects ?? [], note, tags, created: Date.now() };
+      saveNotes([...notes, saved]);
+      return saved;
+    },
+    async updateNote(id, patch) {
+      saveNotes(notes.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+      return notes.find((n) => n.id === id)!;
+    },
+    async deleteNote(id) {
+      saveNotes(notes.filter((n) => n.id !== id));
+    },
     pages: async () => data.paper.pages,
     chunks: async () => data.chunks,
     map: async () => data.map,
@@ -93,6 +136,7 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
           answer: run.rag.answer,
           claims: run.rag.claims,
           removed: run.rag.removed,
+          partial: run.rag.partial,
           gaveUp: false,
           searches: 1,
           sources: run.rag.sources,
@@ -109,7 +153,8 @@ export async function createDemoApi(url = "/demo/demo_data.json"): Promise<Resea
           if (hit.chunk == null) continue;
           const previous = seen.get(hit.chunk);
           if (!previous || previous.score < hit.score) {
-            seen.set(hit.chunk, { chunk: hit.chunk, page: hit.page, score: hit.score, text: data.chunks[hit.chunk].text });
+            const chunk = data.chunks[hit.chunk];
+            seen.set(hit.chunk, { chunk: hit.chunk, page: hit.page, score: hit.score, text: chunk.text, rects: chunk.rects });
           }
         }
       }
