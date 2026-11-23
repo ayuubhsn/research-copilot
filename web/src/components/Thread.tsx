@@ -73,7 +73,7 @@ function EmptyState({ doc, suggestions, onAsk }: { doc: DocumentInfo; suggestion
         </p>
         {doc.license && doc.citation && (
           <p className="mt-4 text-xs text-dim">
-            Demo paper: {toPlain(reference(doc.citation, "apa"))} Licensed {doc.license}.
+            Demo paper: {toPlain(reference(doc.citation, "apa")).replace(/([^.])$/, "$1.")} Licensed {doc.license}.
           </p>
         )}
         <h2 className="mt-9 mb-3 text-xs font-semibold tracking-wide text-muted uppercase">Try one of these</h2>

@@ -4,7 +4,9 @@ An AI research assistant for academic PDFs. Upload papers, ask questions in plai
 
 Built as a retrieval-augmented generation (RAG) pipeline with a search agent, a fact-checking step and a knowledge map, and evaluated with its own test sets to measure what each change actually does.
 
-<!-- Add a screenshot or GIF of the app here: ![ResearchCopilot](docs/screenshot.png) -->
+**[Try the demo in your browser →](https://ayuubhsn.github.io/research-copilot/)** No account or API key needed: it replays recorded answers about an open-access paper.
+
+[![ResearchCopilot answering a question, with the source highlighted in the PDF](https://ayuubhsn.github.io/research-copilot/img/hero.jpg)](https://ayuubhsn.github.io/research-copilot/)
 
 ## Features
 
@@ -167,6 +169,8 @@ You need Python 3.11+, Node.js 20+ and an OpenAI API key.
 
 Without `NEXT_PUBLIC_API_URL`, the web app runs in demo mode and replays recorded answers (see [`web/README.md`](web/README.md)).
 
+The public demo and landing page are built by `.github/workflows/pages.yml` on every push to `main`: the web app is exported as static files (`STATIC_EXPORT=1`) and combined with `site/`. The demo data in `site/demo/` comes from `python eval/export_demo.py <paper.pdf> <questions.txt> --publish "CC BY 4.0"`, which is only used for papers that may be published.
+
 Run the backend tests with `python -m pytest tests`. They replace the embedding model and OpenAI with simple stand-ins, so they need no network or API key.
 
 ## Running the evaluation
@@ -204,5 +208,6 @@ research-copilot/
 ├── web/                     # Next.js frontend
 ├── tests/                   # Backend tests
 ├── eval/                    # Test sets and evaluation scripts
+├── site/                    # Landing page and the published demo paper
 └── app.py                   # First version (Streamlit)
 ```
