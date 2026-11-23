@@ -1,0 +1,74 @@
+# Builds the landing page and the clickable demo, and publishes both to GitHub Pages:
+#   https://ayuubhsn.github.io/research-copilot/      landing page (site/)
+#   https://ayuubhsn.github.io/research-copilot/app/  the web app in demo mode (web/)
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only a paper with an open licence may be published
+      - name: Check the demo paper
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          paper = json.load(open("site/demo/demo_data.json"))["paper"]
+          if not paper.get("license"):
+              sys.exit("site/demo has no licence. Export it with --publish.")
+          print("Demo paper:", paper["file"], "under", paper["license"])
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the app as static files
+        working-directory: web
+        env:
+          STATIC_EXPORT: "1"
+          NEXT_PUBLIC_BASE_PATH: /research-copilot/app
+        run: |
+          npm ci
+          mkdir -p public/demo
+          cp ../site/demo/* public/demo/
+          npx next build
+
+      - name: Put the landing page and the app together
+        run: |
+          mkdir _site
+          cp -r site/index.html site/fonts site/img _site/
+          cp -r web/out _site/app
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

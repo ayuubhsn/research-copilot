@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="no" class="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResearchCopilot · Ayuub Hassan</title>
+<meta name="description" content="ResearchCopilot answers questions about research papers and marks the source of every claim in the original PDF. Try the demo in your browser.">
+<meta property="og:title" content="ResearchCopilot: answers you can check">
+<meta property="og:description" content="Ask a research paper a question, get an answer with page citations, and see the source highlighted in the PDF.">
+<meta property="og:image" content="img/hero.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='none' stroke='%23f2d04b' stroke-width='4'/><circle cx='16' cy='16' r='4' fill='%23f2d04b'/></svg>">
+<style>
+@font-face { font-family: Inter; src: url(fonts/inter-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: Newsreader; src: url(fonts/newsreader-latin-opsz-normal.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: Newsreader; font-style: italic; src: url(fonts/newsreader-latin-opsz-italic.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: JBM; src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+:root { --bg:#0b0f0e; --panel:#131817; --raised:#1c2321; --line:#26302d; --text:#ecede8; --soft:#c2c9c4; --muted:#98a19c; --dim:#68716c; --accent:#f2d04b; --mint:#7cc4a4; --warn:#e9a86b; --bad:#e58a7a; --ink:#141817; --pad: clamp(20px, 6vw, 120px); }
+* { box-sizing: border-box; margin: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.mono { font-family: JBM, ui-monospace, monospace; }
+/* language: Norwegian is the default, English is switched on with the toggle */
+html.no [lang="en"], html.en [lang="no"] { display: none !important; }
+
+nav { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px var(--pad); background: rgba(11,15,14,.82); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
+.logo { width: 24px; height: 24px; border: 3px solid var(--accent); border-radius: 50%; display: grid; place-items: center; }
+.logo i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.links { display: flex; gap: 34px; color: var(--muted); font-size: 15px; }
+.links a:hover { color: var(--text); }
+.right { display: flex; gap: 18px; align-items: center; font-size: 15px; }
+.lang { background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 4px; }
+html.no .lang .n, html.en .lang .e { color: var(--accent); font-weight: 600; }
+.btn-out { border: 1px solid var(--line); border-radius: 10px; padding: 9px 15px; display: flex; gap: 10px; align-items: center; white-space: nowrap; transition: border-color .15s; }
+.btn-out:hover { border-color: var(--muted); }
+
+.hero { position: relative; min-height: min(820px, calc(100vh - 60px)); display: flex; align-items: center; padding: 80px var(--pad); overflow: hidden;
+  background: radial-gradient(900px 600px at 78% 45%, rgba(124,196,164,.10), transparent 60%), radial-gradient(700px 500px at 15% 80%, rgba(242,208,75,.06), transparent 60%); }
+.hero::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px); background-size: 28px 28px; mask-image: linear-gradient(90deg, transparent 35%, black 70%); }
+.copy { position: relative; z-index: 2; max-width: 600px; }
+.kicker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 12.5px; letter-spacing: .18em; font-weight: 600; color: var(--soft); text-transform: uppercase; }
+.kicker i { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); }
+h1 { font-family: Newsreader, Georgia, serif; font-weight: 400; font-size: clamp(56px, 7vw, 96px); line-height: .98; letter-spacing: -.03em; margin-top: 28px; }
+h1 em, h2 em { color: var(--accent); }
+.lead { margin-top: 28px; font-size: clamp(18px, 1.5vw, 21px); line-height: 1.6; color: var(--soft); max-width: 540px; }
+.ctas { display: flex; flex-wrap: wrap; gap: 26px; align-items: center; margin-top: 38px; }
+.btn { background: var(--accent); color: var(--ink); font-weight: 600; font-size: 17px; padding: 17px 26px; border-radius: 12px; display: inline-flex; gap: 14px; align-items: center; border: 0; cursor: pointer; font-family: inherit; transition: transform .15s, box-shadow .15s; }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 12px 36px rgba(242,208,75,.25); }
+.link { font-size: 17px; font-weight: 500; display: flex; gap: 10px; align-items: center; }
+.link:hover { color: var(--accent); }
+.tags { margin-top: 52px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12.5px; letter-spacing: .14em; color: var(--muted); }
+.tags i { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); }
+.tags .sep { color: var(--dim); }
+.stage { position: absolute; left: 52%; top: 50%; width: 900px; transform: translateY(-50%) perspective(1800px) rotateY(-12deg) rotateX(4deg); transform-origin: left center; }
+.frame { border-radius: 14px; overflow: hidden; border: 1px solid #2c3532; box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03); background: #0e1211; }
+.bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: #151a19; border-bottom: 1px solid #222a28; }
+.bar i { width: 10px; height: 10px; border-radius: 50%; background: #2d3532; }
+.bar .url { margin-left: 16px; font-size: 11px; color: var(--dim); background: #0e1211; border-radius: 6px; padding: 4px 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 380px; }
+.bar .open { margin-left: auto; font-size: 12px; color: var(--muted); }
+.bar .open:hover { color: var(--accent); }
+.frame img { display: block; width: 100%; height: auto; }
+.float { position: absolute; z-index: 3; background: rgba(22,27,26,.92); backdrop-filter: blur(8px); border: 1px solid #2f3936; border-radius: 16px; padding: 16px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+.f1 { left: calc(52% + 60px); bottom: 70px; width: 330px; }
+.f1 .t { font-size: 11px; letter-spacing: .14em; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; text-transform: uppercase; }
+.f1 .row { display: flex; gap: 10px; align-items: flex-start; margin-top: 11px; font-size: 14px; color: var(--soft); line-height: 1.4; }
+.dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; color: var(--ink); font-weight: 700; }
+.f2 { right: calc(var(--pad) * .6); top: 110px; padding: 11px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--soft); }
+.chip { font-family: JBM, monospace; font-size: 12px; background: var(--accent); color: var(--ink); border-radius: 5px; padding: 2px 7px; font-weight: 600; }
+
+section.s { padding: clamp(72px, 9vw, 110px) var(--pad); border-top: 1px solid var(--line); }
+.eyebrow { font-size: 12.5px; letter-spacing: .18em; font-weight: 600; color: var(--mint); text-transform: uppercase; }
+h2 { font-family: Newsreader, Georgia, serif; font-weight: 400; font-size: clamp(40px, 4.6vw, 60px); line-height: 1.05; letter-spacing: -.02em; margin-top: 14px; max-width: 900px; }
+.sub { margin-top: 18px; font-size: 18.5px; color: var(--soft); max-width: 740px; line-height: 1.6; }
+.sub a { color: var(--accent); }
+
+.demo { margin-top: 44px; position: relative; }
+.demo .poster { position: relative; }
+.demo .poster img { filter: brightness(.45) saturate(.8) blur(1.5px); }
+.play { background: radial-gradient(420px 220px at 50% 50%, rgba(11,15,14,.85), transparent 75%); }
+.play { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 20px; }
+.play .btn { font-size: 19px; padding: 19px 30px; box-shadow: 0 20px 60px rgba(242,208,75,.25); }
+.play p { color: var(--soft); font-size: 15px; }
+.demo iframe { display: block; width: 100%; height: min(860px, 82vh); border: 0; background: #0b0f0e; }
+.attribution { margin-top: 14px; font-size: 13.5px; color: var(--dim); line-height: 1.55; max-width: 900px; }
+.attribution a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 22px; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; font-size: 14.5px; color: var(--soft); line-height: 1.5; }
+.step b { display: block; font-family: JBM, monospace; color: var(--accent); font-size: 12px; margin-bottom: 4px; font-weight: 500; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 44px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.card .shot { aspect-ratio: 16 / 8.5; overflow: hidden; border-bottom: 1px solid var(--line); background: #0e1211; }
+.card .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card .txt { padding: 22px 26px 26px; }
+.card h3 { font-family: Newsreader, Georgia, serif; font-weight: 400; font-size: 29px; letter-spacing: -.01em; }
+.card p { margin-top: 8px; color: var(--soft); font-size: 15.5px; line-height: 1.55; }
+
+.pipe { margin-top: 44px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; counter-reset: s; }
+.node { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; position: relative; }
+.node::before { counter-increment: s; content: "0" counter(s); font-family: JBM, monospace; font-size: 12px; color: var(--accent); }
+.node h4 { font-size: 16px; font-weight: 600; margin-top: 8px; }
+.node p { font-size: 14px; color: var(--soft); line-height: 1.5; margin-top: 6px; }
+.node code { font-family: JBM, monospace; font-size: 12px; color: var(--mint); display: block; margin-top: 10px; }
+.node:not(:last-child)::after { content: "→"; position: absolute; right: -11px; top: 50%; transform: translateY(-50%); color: var(--dim); font-size: 14px; }
+.notes { margin-top: 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.note { border-left: 2px solid var(--line); padding: 4px 0 4px 16px; font-size: 15px; color: var(--soft); line-height: 1.55; }
+.note b { color: var(--text); font-weight: 600; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 44px; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.stat { padding: 30px 28px; border-right: 1px solid var(--line); background: var(--panel); }
+.stat:last-child { border-right: 0; }
+.stat .n { font-family: Newsreader, Georgia, serif; font-size: 58px; line-height: 1; }
+.stat .n small { font-size: 26px; color: var(--dim); }
+.stat .l { margin-top: 12px; color: var(--soft); font-size: 14.5px; line-height: 1.5; }
+.method { margin-top: 18px; font-size: 14px; color: var(--dim); max-width: 860px; line-height: 1.55; }
+
+.about { display: flex; flex-wrap: wrap; gap: 40px; justify-content: space-between; align-items: flex-end; }
+.about .who { max-width: 640px; }
+.about .who p { margin-top: 16px; font-size: 18px; color: var(--soft); line-height: 1.6; }
+.about .go { display: flex; flex-wrap: wrap; gap: 12px; }
+footer { padding: 28px var(--pad); border-top: 1px solid var(--line); color: var(--dim); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+
+@media (max-width: 1180px) {
+  .stage, .float { display: none; }
+  .hero { min-height: 0; padding-top: 72px; padding-bottom: 72px; }
+  .hero-shot { display: block !important; margin-top: 48px; }
+  .pipe { grid-template-columns: repeat(3, 1fr); }
+  .node:nth-child(3)::after { display: none; }
+}
+@media (max-width: 860px) {
+  .links { display: none; }
+  .grid, .notes { grid-template-columns: 1fr; }
+  .steps, .stats { grid-template-columns: 1fr 1fr; }
+  .stat:nth-child(2) { border-right: 0; }
+  .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .pipe { grid-template-columns: 1fr 1fr; }
+  .node::after { display: none; }
+  .btn-out .label { display: none; }
+  .bar .url { display: none; }
+  .play p { font-size: 13.5px; }
+}
+@media (max-width: 520px) {
+  .steps, .stats, .pipe { grid-template-columns: 1fr; }
+  .stat { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="#top"><span class="logo"><i></i></span>ResearchCopilot</a>
+  <div class="links">
+    <a href="#demo"><span lang="no">Prøv selv</span><span lang="en">Try it</span></a>
+    <a href="#features"><span lang="no">Funksjonene</span><span lang="en">Features</span></a>
+    <a href="#built"><span lang="no">Slik er den bygget</span><span lang="en">How it's built</span></a>
+    <a href="#results"><span lang="no">Resultater</span><span lang="en">Results</span></a>
+  </div>
+  <div class="right">
+    <button class="lang mono" id="lang" aria-label="Bytt språk / Switch language"><span class="n">NO</span> | <span class="e">EN</span></button>
+    <a class="btn-out" href="https://github.com/ayuubhsn/research-copilot" target="_blank" rel="noopener"><span class="label"><span lang="no">Se kildekoden</span><span lang="en">View the code</span></span><span>↗</span></a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="copy">
+    <div class="kicker"><i></i><span lang="no">Eget prosjekt</span><span lang="en">Personal project</span> <span style="color:var(--dim)">/</span> Ayuub Hassan · 2026</div>
+    <h1><span lang="no">Svar du kan<br><em>sjekke.</em></span><span lang="en">Answers you<br>can <em>check.</em></span></h1>
+    <p class="lead">
+      <span lang="no">ResearchCopilot leser forskningsartiklene dine og svarer bare fra dem, med siden bak hver påstand markert i den originale PDF-en.</span>
+      <span lang="en">ResearchCopilot reads your research papers and answers only from them, with the page behind every claim highlighted in the original PDF.</span>
+    </p>
+    <div class="ctas">
+      <a class="btn" href="#demo"><span lang="no">Prøv appen</span><span lang="en">Try the app</span> <span>↓</span></a>
+      <a class="link" href="#built"><span lang="no">Slik fungerer den</span><span lang="en">How it works</span> <span>→</span></a>
+    </div>
+    <div class="tags mono"><i></i>PYTHON <span class="sep">·</span> FASTAPI <span class="sep">·</span> NEXT.JS <span class="sep">·</span> FAISS + BM25 <span class="sep">·</span> GPT-4o-mini</div>
+    <div class="frame hero-shot" style="display:none"><div class="bar"><i></i><i></i><i></i></div><img src="img/hero.png" alt="" loading="lazy"></div>
+  </div>
+  <div class="stage" aria-hidden="true">
+    <div class="frame"><div class="bar"><i></i><i></i><i></i><span class="url mono">ayuubhsn.github.io/research-copilot/app</span></div><img src="img/hero.png" alt=""></div>
+  </div>
+  <div class="float f2" aria-hidden="true"><span class="chip">p.5</span><span lang="no">Kilden er markert i PDF-en</span><span lang="en">The source is highlighted in the PDF</span></div>
+  <div class="float f1" aria-hidden="true">
+    <div class="t"><span>● <span lang="no">Faktasjekk</span><span lang="en">Fact-check</span></span><span style="color:var(--dim)"><span lang="no">Eksempel</span><span lang="en">Example</span></span></div>
+    <div class="row"><span class="dot" style="background:var(--mint)">✓</span><span><span lang="no">Støttet av teksten på siden</span><span lang="en">Supported by the text on the page</span></span></div>
+    <div class="row"><span class="dot" style="background:var(--warn)">◐</span><span><span lang="no">Delvis støttet, med begrunnelse</span><span lang="en">Partly supported, with the reason</span></span></div>
+    <div class="row"><span class="dot" style="background:var(--bad)">✗</span><span style="text-decoration:line-through;color:var(--muted)"><span lang="no">Uten dekning, fjernet fra svaret</span><span lang="en">Not supported, removed from the answer</span></span></div>
+  </div>
+</header>
+
+<section class="s" id="demo">
+  <div class="eyebrow"><span lang="no">Prøv selv</span><span lang="en">Try it</span></div>
+  <h2><span lang="no">Klikk deg rundt i <em>den ekte appen.</em></span><span lang="en">Click around <em>the real app.</em></span></h2>
+  <p class="sub">
+    <span lang="no">Appen er lastet med en åpen forskningsartikkel. Svarene er ekte kjøringer som spilles av i nettleseren, så du trenger verken konto eller nøkkel. Søk, markering og notatbok virker fullt ut.</span>
+    <span lang="en">The app is loaded with an open-access research paper. The answers are real runs replayed in your browser, so you need no account or key. Search, highlighting and the notebook work fully.</span>
+  </p>
+  <div class="demo">
+    <div class="frame" id="demoframe">
+      <div class="bar"><i></i><i></i><i></i><span class="url mono">ayuubhsn.github.io/research-copilot/app</span><a class="open" href="app/" target="_blank" rel="noopener"><span lang="no">Åpne i fullskjerm ↗</span><span lang="en">Open full screen ↗</span></a></div>
+      <div class="poster" id="poster">
+        <img src="img/demo.png" alt="" loading="lazy">
+        <div class="play">
+          <button class="btn" id="start">▶ <span lang="no">Start demoen</span><span lang="en">Start the demo</span></button>
+          <p><span lang="no">Kjører i nettleseren · ingen innlogging · ingen kostnad</span><span lang="en">Runs in your browser · no sign-in · no cost</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="attribution" id="attribution"></p>
+  <div class="steps">
+    <div class="step"><b>01</b><span lang="no">Velg et spørsmål, og se svaret med sidemerker</span><span lang="en">Pick a question and see the answer with page labels</span></div>
+    <div class="step"><b>02</b><span lang="no">Klikk et sidemerke, og PDF-en åpnes med kilden markert</span><span lang="en">Click a page label and the PDF opens with the source highlighted</span></div>
+    <div class="step"><b>03</b><span lang="no">Søk med egne ord i «Find again»</span><span lang="en">Search in your own words with “Find again”</span></div>
+    <div class="step"><b>04</b><span lang="no">Marker et sitat og kopier det i APA, MLA eller IEEE</span><span lang="en">Select a quote and copy it in APA, MLA or IEEE</span></div>
+  </div>
+</section>
+
+<section class="s" id="features">
+  <div class="eyebrow"><span lang="no">Funksjonene</span><span lang="en">Features</span></div>
+  <h2><span lang="no">Bygget for å <em>vise kilden</em>, ikke bare svare.</span><span lang="en">Built to <em>show the source</em>, not just answer.</span></h2>
+  <div class="grid">
+    <div class="card"><div class="shot"><img src="img/pdf.png" alt="" loading="lazy"></div><div class="txt">
+      <h3><span lang="no">Kilden i den originale PDF-en</span><span lang="en">The source in the original PDF</span></h3>
+      <p><span lang="no">Hver påstand har en side. Klikk den, og avsnittet som støtter den lyser opp i artikkelen.</span><span lang="en">Every claim has a page. Click it, and the passage that supports it lights up in the paper.</span></p>
+    </div></div>
+    <div class="card"><div class="shot"><img src="img/factcheck.png" alt="" loading="lazy"></div><div class="txt">
+      <h3><span lang="no">Faktasjekk med tre nivåer</span><span lang="en">Three-level fact-check</span></h3>
+      <p><span lang="no">Støttet, delvis støttet eller ikke støttet. Påstander uten dekning fjernes, og du ser hvorfor.</span><span lang="en">Supported, partly supported or not supported. Claims without support are removed, and you see why.</span></p>
+    </div></div>
+    <div class="card"><div class="shot"><img src="img/find.png" alt="" loading="lazy"></div><div class="txt">
+      <h3><span lang="no">Finn igjen</span><span lang="en">Find again</span></h3>
+      <p><span lang="no">«Hvor var det jeg leste det?» Søk i alle artiklene med egne ord, uten AI-kall, så det er umiddelbart og gratis.</span><span lang="en">“Where did I read that?” Search every paper in your own words, with no AI call, so it is instant and free.</span></p>
+    </div></div>
+    <div class="card"><div class="shot"><img src="img/notebook.png" alt="" loading="lazy"></div><div class="txt">
+      <h3><span lang="no">Notatbok og sitering</span><span lang="en">Notebook and citations</span></h3>
+      <p><span lang="no">Lagre sitater med side og notat. Kopier i APA 7, Harvard, MLA, Chicago eller IEEE, i teksten eller som referanse, eller eksporter til Zotero.</span><span lang="en">Save quotes with page and note. Copy them in APA 7, Harvard, MLA, Chicago or IEEE, in-text or as a reference, or export to Zotero.</span></p>
+    </div></div>
+  </div>
+</section>
+
+<section class="s" id="built">
+  <div class="eyebrow"><span lang="no">Slik er den bygget</span><span lang="en">How it's built</span></div>
+  <h2><span lang="no">Fra PDF til <em>et svar med kilder.</em></span><span lang="en">From PDF to <em>an answer with sources.</em></span></h2>
+  <div class="pipe">
+    <div class="node"><h4><span lang="no">Les</span><span lang="en">Read</span></h4><p><span lang="no">Teksten hentes side for side og deles i avsnitt med naboer.</span><span lang="en">Text is pulled page by page and split into passages with neighbours.</span></p><code>PyMuPDF</code></div>
+    <div class="node"><h4><span lang="no">Søk</span><span lang="en">Search</span></h4><p><span lang="no">Betydning og nøkkelord kombineres, så både omskrivinger og navn treffer.</span><span lang="en">Meaning and keywords are combined, so paraphrases and names both match.</span></p><code>FAISS + BM25 · RRF</code></div>
+    <div class="node"><h4><span lang="no">Svar</span><span lang="en">Answer</span></h4><p><span lang="no">Modellen svarer bare fra avsnittene og oppgir side for hver påstand.</span><span lang="en">The model answers only from the passages and cites a page for each claim.</span></p><code>GPT-4o-mini</code></div>
+    <div class="node"><h4>Scout</h4><p><span lang="no">For vanskelige spørsmål søker en agent flere ganger før den svarer.</span><span lang="en">For hard questions an agent searches several times before it answers.</span></p><code>function calling</code></div>
+    <div class="node"><h4><span lang="no">Sjekk</span><span lang="en">Check</span></h4><p><span lang="no">Hver påstand sjekkes mot kildeteksten, og det som mangler dekning fjernes.</span><span lang="en">Each claim is checked against the source text, and what lacks support is removed.</span></p><code>three-level check</code></div>
+    <div class="node"><h4><span lang="no">Vis</span><span lang="en">Show</span></h4><p><span lang="no">Kildeteksten finnes igjen på siden og markeres i den originale PDF-en.</span><span lang="en">The source text is found again on the page and highlighted in the original PDF.</span></p><code>pdf.js · Next.js</code></div>
+  </div>
+  <div class="notes">
+    <div class="note"><b><span lang="no">Backend:</span><span lang="en">Backend:</span></b> <span lang="no">FastAPI med opplasting, søk, notatbok og oppslag av DOI og referanser i Crossref. 22 tester.</span><span lang="en">FastAPI with uploads, search, notebook and DOI and reference lookup in Crossref. 22 tests.</span></div>
+    <div class="note"><b><span lang="no">Frontend:</span><span lang="en">Frontend:</span></b> <span lang="no">Next.js og React med pdf.js for visning og markering, og siteringer i fem stiler.</span><span lang="en">Next.js and React with pdf.js for viewing and highlighting, and citations in five styles.</span></div>
+    <div class="note"><b><span lang="no">Denne demoen:</span><span lang="en">This demo:</span></b> <span lang="no">Den samme appen bygget som statiske filer. Svarene er tatt opp på forhånd, så besøk koster ingenting.</span><span lang="en">The same app built as static files. The answers are recorded in advance, so visits cost nothing.</span></div>
+  </div>
+</section>
+
+<section class="s" id="results">
+  <div class="eyebrow"><span lang="no">Resultater</span><span lang="en">Results</span></div>
+  <h2><span lang="no">Hver endring er <em>målt.</em></span><span lang="en">Every change is <em>measured.</em></span></h2>
+  <div class="stats">
+    <div class="stat"><div class="n">85<small>%</small></div><div class="l"><span lang="no">av spørsmålene får riktig side først (fra 58 %)</span><span lang="en">of questions get the right page first (up from 58%)</span></div></div>
+    <div class="stat"><div class="n"><span lang="no">0,90</span><span lang="en">0.90</span></div><div class="l"><span lang="no">MRR med hybridsøk (fra 0,74)</span><span lang="en">MRR with hybrid search (up from 0.74)</span></div></div>
+    <div class="stat"><div class="n">84<small>%</small></div><div class="l"><span lang="no">riktige svar på en artikkel systemet aldri var justert på</span><span lang="en">correct answers on a paper the system was never tuned on</span></div></div>
+    <div class="stat"><div class="n">79<small>%</small></div><div class="l"><span lang="no">av innplantede feil fanget av faktasjekken, 0 falske alarmer</span><span lang="en">of planted errors caught by the fact-check, 0 false alarms</span></div></div>
+  </div>
+  <p class="method"><span lang="no">Målt med egne spørsmålssett og skript i <a href="https://github.com/ayuubhsn/research-copilot/tree/main/eval" style="text-decoration:underline">eval/</a>-mappen, der hver ide testes før den blir værende.</span><span lang="en">Measured with my own question sets and the scripts in the <a href="https://github.com/ayuubhsn/research-copilot/tree/main/eval" style="text-decoration:underline">eval/</a> folder, where every idea is tested before it stays.</span></p>
+</section>
+
+<section class="s" id="about">
+  <div class="about">
+    <div class="who">
+      <div class="eyebrow"><span lang="no">Laget av</span><span lang="en">Made by</span></div>
+      <h2>Ayuub Hassan</h2>
+      <p><span lang="no">Masterstudent i digital økonomi og ledelse ved Universitetet i Oslo. Jeg laget ResearchCopilot fordi jeg ville ha svar fra artiklene jeg leser som jeg faktisk kan stole på.</span><span lang="en">Master's student in digital economics and leadership at the University of Oslo. I built ResearchCopilot because I wanted answers from the papers I read that I can actually trust.</span></p>
+    </div>
+    <div class="go">
+      <a class="btn" href="https://github.com/ayuubhsn/research-copilot" target="_blank" rel="noopener"><span lang="no">Se kildekoden</span><span lang="en">View the code</span> ↗</a>
+      <a class="btn-out" href="https://www.linkedin.com/in/ayuubhassan" target="_blank" rel="noopener">LinkedIn ↗</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>© 2026 Ayuub Hassan</span>
+  <span id="footer-paper"></span>
+</footer>
+
+<script>
+  // Language: remembered, otherwise taken from the browser
+  const root = document.documentElement;
+  const setLang = (l) => { root.className = l; root.lang = l; try { localStorage.setItem("lang", l); } catch {} };
+  let saved = null;
+  try { saved = localStorage.getItem("lang"); } catch {}
+  setLang(saved || (navigator.language || "").match(/^(nb|nn|no)/) ? (saved || "no") : "en");
+  document.getElementById("lang").onclick = () => setLang(root.className === "no" ? "en" : "no");
+
+  // The demo loads only when asked, so the page itself stays light
+  document.getElementById("start").onclick = () => {
+    if (window.innerWidth < 860) { location.href = "app/"; return; }
+    const frame = document.createElement("iframe");
+    frame.src = "app/";
+    frame.title = "ResearchCopilot demo";
+    document.getElementById("poster").replaceWith(frame);
+  };
+
+  // Attribution for the demo paper comes from the same file the app uses
+  fetch("app/demo/demo_data.json").then((r) => r.json()).then(({ paper }) => {
+    const c = paper.citation || {};
+    const names = (c.authors || []).map((a) => a.family).filter(Boolean);
+    const who = names.length > 2 ? names[0] + " et al." : names.join(" & ");
+    const url = c.doi ? "https://doi.org/" + c.doi : c.url;
+    const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+    const title = esc(c.title || paper.file);
+    const link = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${title}</a>` : title;
+    const meta = [who, c.year, c.journal].filter(Boolean).map(esc).join(", ");
+    const lic = paper.license ? esc(paper.license) : "";
+    document.getElementById("attribution").innerHTML =
+      `<span lang="no">Demoartikkel: ${link}${meta ? " (" + meta + ")" : ""}${lic ? ". Brukt under " + lic + "-lisens." : "."}</span>` +
+      `<span lang="en">Demo paper: ${link}${meta ? " (" + meta + ")" : ""}${lic ? ". Used under " + lic + "." : "."}</span>`;
+    document.getElementById("footer-paper").innerHTML = lic ? `<span lang="no">Demoartikkel under ${lic}</span><span lang="en">Demo paper under ${lic}</span>` : "";
+  }).catch(() => {});
+</script>
+</body>
+</html>

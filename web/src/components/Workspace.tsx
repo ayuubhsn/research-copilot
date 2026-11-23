@@ -316,7 +316,7 @@ export default function Workspace() {
           onEditCitation={setEditing}
         />
         <main className="flex min-h-[60vh] min-w-0 flex-1 flex-col border-line lg:min-h-0 lg:border-r">
-          {doc && <ViewTabs view={view} setView={setView} notes={notes.length} live={api.live} />}
+          {doc && <ViewTabs view={view} setView={setView} notes={notes.length} />}
           {doc && view === "find" ? (
             <FindAgain
               docs={docs}
@@ -350,7 +350,7 @@ export default function Workspace() {
                 onCite={showPage}
                 onSource={showSource}
                 onClaim={showClaim}
-                onSaveSource={api.live ? (hit) => saveNote(doc.id, hit.page, hit.text) : undefined}
+                onSaveSource={(hit) => saveNote(doc.id, hit.page, hit.text)}
                 style={style}
                 setStyle={setStyle}
               />
@@ -374,7 +374,7 @@ export default function Workspace() {
             turn={view === "ask" ? activeTurn : null}
             onSource={showSource}
             notes={notes.filter((n) => n.docId === doc.id)}
-            onSaveSelection={api.live ? (page, text) => saveNote(doc.id, page, text) : undefined}
+            onSaveSelection={(page, text) => saveNote(doc.id, page, text)}
           />
         )}
       </div>
@@ -393,7 +393,7 @@ export default function Workspace() {
   );
 }
 
-function ViewTabs({ view, setView, notes, live }: { view: View; setView: (v: View) => void; notes: number; live: boolean }) {
+function ViewTabs({ view, setView, notes }: { view: View; setView: (v: View) => void; notes: number }) {
   const tabs: { id: View; label: string }[] = [
     { id: "ask", label: "Ask" },
     { id: "find", label: "Find again" },
@@ -405,9 +405,7 @@ function ViewTabs({ view, setView, notes, live }: { view: View; setView: (v: Vie
         <button
           key={t.id}
           onClick={() => setView(t.id)}
-          disabled={!live && t.id !== "ask"}
-          title={!live && t.id !== "ask" ? "Needs the backend" : undefined}
-          className={`rounded-lg px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`rounded-lg px-3 py-1.5 text-sm transition ${
             view === t.id ? "bg-raised font-medium text-text" : "text-muted hover:text-soft"
           }`}
         >
