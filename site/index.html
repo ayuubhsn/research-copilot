@@ -7,7 +7,7 @@
 <meta name="description" content="ResearchCopilot answers questions about research papers and marks the source of every claim in the original PDF. Try the demo in your browser.">
 <meta property="og:title" content="ResearchCopilot: answers you can check">
 <meta property="og:description" content="Ask a research paper a question, get an answer with page citations, and see the source highlighted in the PDF.">
-<meta property="og:image" content="img/hero.png">
+<meta property="og:image" content="https://ayuubhsn.github.io/research-copilot/img/hero.jpg">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='none' stroke='%23f2d04b' stroke-width='4'/><circle cx='16' cy='16' r='4' fill='%23f2d04b'/></svg>">
 <style>
 @font-face { font-family: Inter; src: url(fonts/inter-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
@@ -177,10 +177,10 @@ footer { padding: 28px var(--pad); border-top: 1px solid var(--line); color: var
       <a class="link" href="#built"><span lang="no">Slik fungerer den</span><span lang="en">How it works</span> <span>→</span></a>
     </div>
     <div class="tags mono"><i></i>PYTHON <span class="sep">·</span> FASTAPI <span class="sep">·</span> NEXT.JS <span class="sep">·</span> FAISS + BM25 <span class="sep">·</span> GPT-4o-mini</div>
-    <div class="frame hero-shot" style="display:none"><div class="bar"><i></i><i></i><i></i></div><img src="img/hero.png" alt="" loading="lazy"></div>
+    <div class="frame hero-shot" style="display:none"><div class="bar"><i></i><i></i><i></i></div><img src="img/hero.jpg" alt="" loading="lazy"></div>
   </div>
   <div class="stage" aria-hidden="true">
-    <div class="frame"><div class="bar"><i></i><i></i><i></i><span class="url mono">ayuubhsn.github.io/research-copilot/app</span></div><img src="img/hero.png" alt=""></div>
+    <div class="frame"><div class="bar"><i></i><i></i><i></i><span class="url mono">ayuubhsn.github.io/research-copilot/app</span></div><img src="img/hero.jpg" alt=""></div>
   </div>
   <div class="float f2" aria-hidden="true"><span class="chip">p.5</span><span lang="no">Kilden er markert i PDF-en</span><span lang="en">The source is highlighted in the PDF</span></div>
   <div class="float f1" aria-hidden="true">
@@ -202,7 +202,7 @@ footer { padding: 28px var(--pad); border-top: 1px solid var(--line); color: var
     <div class="frame" id="demoframe">
       <div class="bar"><i></i><i></i><i></i><span class="url mono">ayuubhsn.github.io/research-copilot/app</span><a class="open" href="app/" target="_blank" rel="noopener"><span lang="no">Åpne i fullskjerm ↗</span><span lang="en">Open full screen ↗</span></a></div>
       <div class="poster" id="poster">
-        <img src="img/demo.png" alt="" loading="lazy">
+        <img src="img/demo.jpg" alt="" loading="lazy">
         <div class="play">
           <button class="btn" id="start">▶ <span lang="no">Start demoen</span><span lang="en">Start the demo</span></button>
           <p><span lang="no">Kjører i nettleseren · ingen innlogging · ingen kostnad</span><span lang="en">Runs in your browser · no sign-in · no cost</span></p>
@@ -318,7 +318,7 @@ footer { padding: 28px var(--pad); border-top: 1px solid var(--line); color: var
     const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
     const title = esc(c.title || paper.file);
     const link = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${title}</a>` : title;
-    const meta = [who, c.year, c.journal].filter(Boolean).map(esc).join(", ");
+    const meta = [who, c.year, c.container || c.journal].filter(Boolean).map(esc).join(", ");
     const lic = paper.license ? esc(paper.license) : "";
     document.getElementById("attribution").innerHTML =
       `<span lang="no">Demoartikkel: ${link}${meta ? " (" + meta + ")" : ""}${lic ? ". Brukt under " + lic + "-lisens." : "."}</span>` +

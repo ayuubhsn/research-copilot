@@ -1,0 +1,6 @@
+﻿What question does this paper investigate?
+What data do the authors use?
+How many workers fear that a machine could do some of their tasks?
+Which workers lose the most job satisfaction from fear of replacement?
+How is job satisfaction measured?
+How do the authors deal with endogeneity?
